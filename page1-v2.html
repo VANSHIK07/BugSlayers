@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EarthWatch India</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --green-dark:#1B4332; --green:#2D6A4F; --green-mid:#40916C;
+    --green-lite:#74C69D; --white:#FFFFFF; --text:#0D1F16; --muted:#5A7A65;
+  }
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:var(--green-dark);}
+
+  #map{position:fixed;inset:0;z-index:0;filter:saturate(0.7) brightness(0.82);transition:filter 1.4s ease;}
+  #map.focused{filter:saturate(1.15) brightness(0.88);}
+  .overlay{position:fixed;inset:0;z-index:1;background:linear-gradient(180deg,rgba(13,31,22,0.6) 0%,rgba(13,31,22,0.2) 45%,rgba(13,31,22,0.6) 100%);pointer-events:none;}
+
+  .topbar{position:fixed;top:0;left:0;right:0;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;z-index:20;}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--green-mid),var(--green-lite));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 16px rgba(45,106,79,0.4);}
+  .logo-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--white);line-height:1;}
+  .logo-tagline{font-size:0.6rem;color:var(--green-lite);letter-spacing:2px;text-transform:uppercase;font-weight:500;}
+  .topbar-right{display:flex;align-items:center;gap:10px;}
+  .live-pill{background:rgba(255,255,255,0.1);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 14px;font-size:0.72rem;color:rgba(255,255,255,0.85);font-weight:500;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;animation:blink 2s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+  .ui{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .hero{display:flex;flex-direction:column;align-items:center;gap:24px;animation:fadeUp 0.8s ease both;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+
+  .hero-label{font-family:'Space Mono',monospace;font-size:0.72rem;letter-spacing:3px;text-transform:uppercase;color:var(--green-lite);background:rgba(116,198,157,0.12);border:1px solid rgba(116,198,157,0.25);padding:6px 16px;border-radius:20px;animation:fadeUp 0.8s 0.1s ease both;}
+  .hero-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,8vw,6.5rem);color:var(--white);text-align:center;line-height:0.95;letter-spacing:3px;text-shadow:0 4px 32px rgba(0,0,0,0.4);animation:fadeUp 0.8s 0.2s ease both;}
+  .hero-title span{color:var(--green-lite);}
+  .hero-sub{font-size:0.95rem;color:rgba(255,255,255,0.65);text-align:center;max-width:420px;line-height:1.7;font-weight:300;animation:fadeUp 0.8s 0.3s ease both;}
+
+  .search-wrap{position:relative;width:480px;animation:fadeUp 0.8s 0.4s ease both;}
+  .search-box{width:100%;background:rgba(255,255,255,0.96);backdrop-filter:blur(16px);border:2px solid rgba(255,255,255,0.3);border-radius:16px;padding:18px 60px 18px 56px;font-family:'DM Sans',sans-serif;font-size:1rem;font-weight:500;color:var(--text);outline:none;transition:all 0.25s;box-shadow:0 8px 40px rgba(0,0,0,0.25);}
+  .search-box::placeholder{color:#9BB5A3;font-weight:400;}
+  .search-box:focus{border-color:var(--green-mid);box-shadow:0 8px 40px rgba(0,0,0,0.25),0 0 0 4px rgba(64,145,108,0.15);}
+  .search-box.error-state{border-color:#DC2626;box-shadow:0 8px 40px rgba(0,0,0,0.25),0 0 0 4px rgba(220,38,38,0.15);animation:shake 0.4s ease;}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+
+  .search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);font-size:1.2rem;pointer-events:none;}
+  .search-clear{position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1rem;cursor:pointer;color:#9BB5A3;display:none;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;transition:background 0.2s;}
+  .search-clear:hover{background:rgba(0,0,0,0.06);}
+  .search-clear.visible{display:flex;}
+
+  .error-msg{display:none;align-items:center;gap:8px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:10px 16px;margin-top:10px;}
+  .error-msg.show{display:flex;animation:fadeUp 0.3s ease both;}
+  .error-msg span{font-size:0.82rem;color:#FCA5A5;font-weight:500;line-height:1.5;}
+
+  .suggestions{position:absolute;top:calc(100% + 8px);left:0;right:0;background:rgba(255,255,255,0.98);border-radius:14px;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,0.2);display:none;z-index:100;max-height:280px;overflow-y:auto;}
+  .suggestions.open{display:block;}
+  .suggestion-item{padding:13px 20px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:background 0.15s;border-bottom:1px solid rgba(0,0,0,0.04);}
+  .suggestion-item:last-child{border-bottom:none;}
+  .suggestion-item:hover{background:rgba(45,106,79,0.07);}
+  .suggestion-name{font-weight:600;font-size:0.9rem;color:var(--text);}
+  .suggestion-state{font-size:0.75rem;color:var(--muted);margin-top:1px;}
+  .suggestion-risk{margin-left:auto;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;}
+  .risk-high{background:#FEE2E2;color:#DC2626;}
+  .risk-mid{background:#FEF3C7;color:#D97706;}
+  .risk-low{background:#DCFCE7;color:#16A34A;}
+
+  .city-card{background:rgba(255,255,255,0.96);backdrop-filter:blur(16px);border-radius:20px;padding:24px 28px;width:480px;box-shadow:0 16px 48px rgba(0,0,0,0.2);display:none;}
+  .city-card.visible{display:block;animation:fadeUp 0.4s ease both;}
+  .city-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .city-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:2px;color:var(--green-dark);line-height:1;}
+  .city-card-state{font-size:0.78rem;color:var(--muted);margin-top:2px;font-weight:500;}
+  .overall-risk{padding:6px 14px;border-radius:10px;font-family:'Space Mono',monospace;font-size:0.78rem;font-weight:700;letter-spacing:1px;}
+  .city-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+  .stat-box{background:#F5FAF6;border-radius:12px;padding:12px 14px;text-align:center;}
+  .stat-box-icon{font-size:1.2rem;margin-bottom:4px;}
+  .stat-box-val{font-family:'Space Mono',monospace;font-size:1rem;font-weight:700;color:var(--green-dark);line-height:1;}
+  .stat-box-label{font-size:0.65rem;color:var(--muted);margin-top:3px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;}
+
+  .show-btn{width:100%;background:linear-gradient(135deg,var(--green-dark),var(--green));color:white;border:none;padding:16px;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:transform 0.15s,box-shadow 0.15s;box-shadow:0 4px 20px rgba(27,67,50,0.35);}
+  .show-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(27,67,50,0.45);}
+  .show-btn:active{transform:translateY(0);}
+  .btn-arrow{transition:transform 0.2s;}
+  .show-btn:hover .btn-arrow{transform:translateX(4px);}
+
+  .sat-badge{position:fixed;bottom:28px;right:24px;background:rgba(13,31,22,0.75);backdrop-filter:blur(8px);border:1px solid rgba(116,198,157,0.2);border-radius:10px;padding:10px 14px;z-index:20;animation:fadeUp 1s 0.8s ease both;}
+  .sat-badge-title{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--green-lite);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;}
+  .sat-item{font-size:0.68rem;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:6px;margin-top:3px;}
+  .sat-dot{width:5px;height:5px;border-radius:50%;background:#4ade80;animation:blink 2s infinite;flex-shrink:0;}
+
+  .leaflet-control-zoom{display:none;}
+  .leaflet-control-attribution{font-size:9px;opacity:0.4;}
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-thumb{background:#C8E6C9;border-radius:2px;}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="overlay"></div>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🛰️</div>
+    <div>
+      <div class="logo-name">EarthWatch India</div>
+      <div class="logo-tagline">Satellite Environmental Intelligence</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="live-pill"><span class="live-dot"></span> Satellite Feed Active</div>
+    <div class="live-pill">MODIS · Sentinel · Landsat</div>
+  </div>
+</div>
+
+<div class="ui">
+  <div class="hero">
+    <div class="hero-label">🌍 Real-Time Environmental Monitoring</div>
+    <div class="hero-title">See Your City<br>From <span>Space</span></div>
+    <div class="hero-sub">Satellite data from ISRO, NASA & ESA — analyzed instantly for heat islands, air quality & vegetation health.</div>
+
+    <div class="search-wrap" id="searchWrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-box" id="searchInput" type="text"
+        placeholder="Search any city in India..."
+        autocomplete="off"
+        oninput="handleSearch(this.value)"
+        onkeydown="handleKeydown(event)"
+      />
+      <button class="search-clear" id="clearBtn" onclick="clearSearch()">✕</button>
+      <div class="suggestions" id="suggestions"></div>
+      <div class="error-msg" id="errorMsg">
+        <span>⚠️&nbsp;</span>
+        <span>Unable to recognise the location. Please check the city name and try again.</span>
+      </div>
+    </div>
+
+    <div class="city-card" id="cityCard">
+      <div class="city-card-header">
+        <div>
+          <div class="city-card-name" id="cardName">—</div>
+          <div class="city-card-state" id="cardState">—</div>
+        </div>
+        <div class="overall-risk" id="cardRisk">—</div>
+      </div>
+      <div class="city-stats">
+        <div class="stat-box">
+          <div class="stat-box-icon">🌡️</div>
+          <div class="stat-box-val" id="cardTemp">—</div>
+          <div class="stat-box-label">Surface Temp</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon">🌿</div>
+          <div class="stat-box-val" id="cardNDVI">—</div>
+          <div class="stat-box-label">NDVI Score</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon">💨</div>
+          <div class="stat-box-val" id="cardAQI">—</div>
+          <div class="stat-box-label">AQI Level</div>
+        </div>
+      </div>
+      <button class="show-btn" onclick="goToDetails()">
+        Show Detailed Analysis <span class="btn-arrow">→</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="sat-badge">
+  <div class="sat-badge-title">Active Satellites</div>
+  <div class="sat-item"><span class="sat-dot"></span> MODIS Terra/Aqua</div>
+  <div class="sat-item"><span class="sat-dot" style="animation-delay:0.6s"></span> Sentinel-5P</div>
+  <div class="sat-item"><span class="sat-dot" style="animation-delay:1.2s"></span> Landsat-8/9</div>
+  <div class="sat-item"><span class="sat-dot" style="animation-delay:1.8s"></span> Resourcesat-2A</div>
+</div>
+
+<script>
+const cities = [
+  {name:"Mumbai",state:"Maharashtra",lat:19.076,lng:72.877,zoom:11,temp:"34.2°C",ndvi:"0.31",aqi:"168",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Delhi",state:"Delhi NCT",lat:28.679,lng:77.069,zoom:11,temp:"39.1°C",ndvi:"0.18",aqi:"243",risk:"CRITICAL",riskClass:"risk-high"},
+  {name:"Bengaluru",state:"Karnataka",lat:12.971,lng:77.594,zoom:11,temp:"28.4°C",ndvi:"0.44",aqi:"112",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Hyderabad",state:"Telangana",lat:17.385,lng:78.487,zoom:11,temp:"33.8°C",ndvi:"0.29",aqi:"134",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Chennai",state:"Tamil Nadu",lat:13.082,lng:80.270,zoom:11,temp:"33.5°C",ndvi:"0.32",aqi:"128",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Kolkata",state:"West Bengal",lat:22.572,lng:88.363,zoom:11,temp:"32.8°C",ndvi:"0.29",aqi:"145",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Pune",state:"Maharashtra",lat:18.521,lng:73.854,zoom:11,temp:"31.6°C",ndvi:"0.37",aqi:"98",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Ahmedabad",state:"Gujarat",lat:23.022,lng:72.571,zoom:11,temp:"38.5°C",ndvi:"0.20",aqi:"188",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Jaipur",state:"Rajasthan",lat:26.912,lng:75.787,zoom:11,temp:"37.4°C",ndvi:"0.14",aqi:"165",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Surat",state:"Gujarat",lat:21.170,lng:72.831,zoom:11,temp:"34.9°C",ndvi:"0.26",aqi:"152",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Lucknow",state:"Uttar Pradesh",lat:26.846,lng:80.946,zoom:11,temp:"35.2°C",ndvi:"0.22",aqi:"178",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Kanpur",state:"Uttar Pradesh",lat:26.449,lng:80.331,zoom:11,temp:"36.1°C",ndvi:"0.19",aqi:"198",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Nagpur",state:"Maharashtra",lat:21.145,lng:79.088,zoom:11,temp:"36.8°C",ndvi:"0.28",aqi:"122",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Indore",state:"Madhya Pradesh",lat:22.719,lng:75.857,zoom:11,temp:"35.4°C",ndvi:"0.24",aqi:"138",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Bhopal",state:"Madhya Pradesh",lat:23.259,lng:77.412,zoom:11,temp:"34.6°C",ndvi:"0.31",aqi:"118",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Visakhapatnam",state:"Andhra Pradesh",lat:17.686,lng:83.218,zoom:11,temp:"31.2°C",ndvi:"0.38",aqi:"95",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Patna",state:"Bihar",lat:25.594,lng:85.137,zoom:11,temp:"34.9°C",ndvi:"0.21",aqi:"182",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Vadodara",state:"Gujarat",lat:22.307,lng:73.181,zoom:11,temp:"37.1°C",ndvi:"0.22",aqi:"142",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Gurgaon",state:"Haryana",lat:28.459,lng:77.027,zoom:12,temp:"38.0°C",ndvi:"0.16",aqi:"228",risk:"CRITICAL",riskClass:"risk-high"},
+  {name:"Gandhinagar",state:"Gujarat",lat:23.216,lng:72.684,zoom:12,temp:"36.2°C",ndvi:"0.35",aqi:"122",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Noida",state:"Uttar Pradesh",lat:28.535,lng:77.391,zoom:12,temp:"37.8°C",ndvi:"0.17",aqi:"215",risk:"CRITICAL",riskClass:"risk-high"},
+  {name:"Faridabad",state:"Haryana",lat:28.408,lng:77.317,zoom:12,temp:"37.5°C",ndvi:"0.16",aqi:"210",risk:"CRITICAL",riskClass:"risk-high"},
+  {name:"Ghaziabad",state:"Uttar Pradesh",lat:28.669,lng:77.454,zoom:12,temp:"37.9°C",ndvi:"0.15",aqi:"222",risk:"CRITICAL",riskClass:"risk-high"},
+  {name:"Coimbatore",state:"Tamil Nadu",lat:11.017,lng:76.955,zoom:12,temp:"29.8°C",ndvi:"0.41",aqi:"88",risk:"LOW",riskClass:"risk-low"},
+  {name:"Kochi",state:"Kerala",lat:9.931,lng:76.267,zoom:12,temp:"28.6°C",ndvi:"0.55",aqi:"72",risk:"LOW",riskClass:"risk-low"},
+  {name:"Thiruvananthapuram",state:"Kerala",lat:8.524,lng:76.936,zoom:12,temp:"29.2°C",ndvi:"0.52",aqi:"68",risk:"LOW",riskClass:"risk-low"},
+  {name:"Mysuru",state:"Karnataka",lat:12.295,lng:76.639,zoom:12,temp:"27.8°C",ndvi:"0.46",aqi:"82",risk:"LOW",riskClass:"risk-low"},
+  {name:"Mangaluru",state:"Karnataka",lat:12.914,lng:74.856,zoom:12,temp:"28.9°C",ndvi:"0.49",aqi:"75",risk:"LOW",riskClass:"risk-low"},
+  {name:"Nashik",state:"Maharashtra",lat:19.997,lng:73.789,zoom:12,temp:"32.1°C",ndvi:"0.34",aqi:"105",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Aurangabad",state:"Maharashtra",lat:19.877,lng:75.343,zoom:12,temp:"33.5°C",ndvi:"0.26",aqi:"115",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Amritsar",state:"Punjab",lat:31.634,lng:74.872,zoom:12,temp:"34.8°C",ndvi:"0.28",aqi:"148",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Ludhiana",state:"Punjab",lat:30.901,lng:75.857,zoom:12,temp:"35.6°C",ndvi:"0.24",aqi:"162",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Chandigarh",state:"Chandigarh UT",lat:30.733,lng:76.779,zoom:12,temp:"32.4°C",ndvi:"0.38",aqi:"112",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Dehradun",state:"Uttarakhand",lat:30.316,lng:78.032,zoom:12,temp:"27.5°C",ndvi:"0.48",aqi:"92",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Varanasi",state:"Uttar Pradesh",lat:25.317,lng:82.973,zoom:12,temp:"35.8°C",ndvi:"0.20",aqi:"185",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Agra",state:"Uttar Pradesh",lat:27.177,lng:78.008,zoom:12,temp:"37.2°C",ndvi:"0.17",aqi:"172",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Jodhpur",state:"Rajasthan",lat:26.292,lng:73.014,zoom:12,temp:"39.8°C",ndvi:"0.10",aqi:"142",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Udaipur",state:"Rajasthan",lat:24.585,lng:73.712,zoom:12,temp:"34.2°C",ndvi:"0.22",aqi:"88",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Ranchi",state:"Jharkhand",lat:23.344,lng:85.309,zoom:12,temp:"30.2°C",ndvi:"0.44",aqi:"102",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Bhubaneswar",state:"Odisha",lat:20.296,lng:85.824,zoom:12,temp:"32.4°C",ndvi:"0.40",aqi:"108",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Guwahati",state:"Assam",lat:26.144,lng:91.736,zoom:12,temp:"28.5°C",ndvi:"0.54",aqi:"88",risk:"LOW",riskClass:"risk-low"},
+  {name:"Shillong",state:"Meghalaya",lat:25.578,lng:91.893,zoom:13,temp:"18.2°C",ndvi:"0.62",aqi:"55",risk:"LOW",riskClass:"risk-low"},
+  {name:"Shimla",state:"Himachal Pradesh",lat:31.104,lng:77.173,zoom:13,temp:"14.5°C",ndvi:"0.60",aqi:"48",risk:"LOW",riskClass:"risk-low"},
+  {name:"Srinagar",state:"Jammu & Kashmir",lat:34.083,lng:74.797,zoom:12,temp:"16.2°C",ndvi:"0.50",aqi:"62",risk:"LOW",riskClass:"risk-low"},
+  {name:"Jammu",state:"Jammu & Kashmir",lat:32.726,lng:74.857,zoom:12,temp:"30.5°C",ndvi:"0.35",aqi:"98",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Leh",state:"Ladakh",lat:34.165,lng:77.577,zoom:13,temp:"8.2°C",ndvi:"0.12",aqi:"35",risk:"LOW",riskClass:"risk-low"},
+  {name:"Panaji",state:"Goa",lat:15.499,lng:73.824,zoom:13,temp:"28.8°C",ndvi:"0.52",aqi:"65",risk:"LOW",riskClass:"risk-low"},
+  {name:"Madurai",state:"Tamil Nadu",lat:9.925,lng:78.119,zoom:12,temp:"32.4°C",ndvi:"0.30",aqi:"105",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Vijayawada",state:"Andhra Pradesh",lat:16.506,lng:80.648,zoom:12,temp:"34.2°C",ndvi:"0.30",aqi:"115",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Rajkot",state:"Gujarat",lat:22.303,lng:70.802,zoom:12,temp:"36.8°C",ndvi:"0.18",aqi:"145",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Allahabad",state:"Uttar Pradesh",lat:25.435,lng:81.846,zoom:12,temp:"36.2°C",ndvi:"0.19",aqi:"175",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Prayagraj",state:"Uttar Pradesh",lat:25.435,lng:81.846,zoom:12,temp:"36.2°C",ndvi:"0.19",aqi:"175",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Meerut",state:"Uttar Pradesh",lat:28.984,lng:77.706,zoom:12,temp:"36.4°C",ndvi:"0.19",aqi:"188",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Raipur",state:"Chhattisgarh",lat:21.251,lng:81.630,zoom:12,temp:"33.6°C",ndvi:"0.35",aqi:"125",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Haridwar",state:"Uttarakhand",lat:29.945,lng:78.163,zoom:13,temp:"28.8°C",ndvi:"0.42",aqi:"88",risk:"LOW",riskClass:"risk-low"},
+  {name:"Hubli",state:"Karnataka",lat:15.364,lng:75.124,zoom:12,temp:"30.2°C",ndvi:"0.33",aqi:"98",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Kota",state:"Rajasthan",lat:25.182,lng:75.839,zoom:12,temp:"37.5°C",ndvi:"0.18",aqi:"155",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Salem",state:"Tamil Nadu",lat:11.664,lng:78.146,zoom:12,temp:"31.5°C",ndvi:"0.32",aqi:"88",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Warangal",state:"Telangana",lat:17.977,lng:79.598,zoom:12,temp:"33.5°C",ndvi:"0.31",aqi:"108",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Dhanbad",state:"Jharkhand",lat:23.795,lng:86.430,zoom:12,temp:"32.5°C",ndvi:"0.30",aqi:"145",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Imphal",state:"Manipur",lat:24.817,lng:93.938,zoom:13,temp:"22.4°C",ndvi:"0.58",aqi:"62",risk:"LOW",riskClass:"risk-low"},
+  {name:"Jamshedpur",state:"Jharkhand",lat:22.805,lng:86.203,zoom:12,temp:"31.8°C",ndvi:"0.38",aqi:"118",risk:"MEDIUM",riskClass:"risk-mid"},
+];
+
+let selectedCity = null;
+let filteredCities = [];
+let errorTimeout = null;
+
+const map = L.map('map',{zoomControl:false}).setView([20.5,78.9],5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+
+function handleSearch(val) {
+  hideError();
+  document.getElementById('clearBtn').classList.toggle('visible', val.length > 0);
+  document.getElementById('cityCard').classList.remove('visible');
+
+  if (!val.trim()) { closeSuggestions(); return; }
+
+  filteredCities = cities.filter(c =>
+    c.name.toLowerCase().includes(val.toLowerCase())
+  ).slice(0, 8);
+
+  filteredCities.length > 0 ? renderSuggestions(filteredCities) : closeSuggestions();
+}
+
+function renderSuggestions(list) {
+  const box = document.getElementById('suggestions');
+  box.innerHTML = list.map(c => `
+    <div class="suggestion-item" onclick="selectCity('${c.name}')">
+      <span>📍</span>
+      <div>
+        <div class="suggestion-name">${c.name}</div>
+        <div class="suggestion-state">${c.state}</div>
+      </div>
+      <span class="suggestion-risk ${c.riskClass}">${c.risk}</span>
+    </div>
+  `).join('');
+  box.classList.add('open');
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Enter') {
+    const val = document.getElementById('searchInput').value.trim();
+    if (!val) return;
+    // only auto-select if it's an exact match, otherwise show error
+    const exact = cities.find(c => c.name.toLowerCase() === val.toLowerCase());
+    if (exact) {
+      selectCity(exact.name);
+    } else {
+      closeSuggestions();
+      showError();
+    }
+  }
+  if (e.key === 'Escape') closeSuggestions();
+}
+
+function showError() {
+  const input = document.getElementById('searchInput');
+  input.classList.add('error-state');
+  document.getElementById('errorMsg').classList.add('show');
+  clearTimeout(errorTimeout);
+  errorTimeout = setTimeout(() => input.classList.remove('error-state'), 600);
+}
+
+function hideError() {
+  document.getElementById('searchInput').classList.remove('error-state');
+  document.getElementById('errorMsg').classList.remove('show');
+}
+
+function closeSuggestions() {
+  document.getElementById('suggestions').classList.remove('open');
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('clearBtn').classList.remove('visible');
+  document.getElementById('cityCard').classList.remove('visible');
+  closeSuggestions();
+  hideError();
+  selectedCity = null;
+  map.flyTo([20.5,78.9],5,{duration:1.4});
+  document.getElementById('map').classList.remove('focused');
+}
+
+function selectCity(name) {
+  const city = cities.find(c => c.name === name);
+  if (!city) return;
+  selectedCity = city;
+  document.getElementById('searchInput').value = city.name;
+  document.getElementById('clearBtn').classList.add('visible');
+  closeSuggestions();
+  hideError();
+
+  map.flyTo([city.lat, city.lng], city.zoom, {duration:1.6});
+  document.getElementById('map').classList.add('focused');
+
+  document.getElementById('cardName').textContent = city.name;
+  document.getElementById('cardState').textContent = city.state + ' · India';
+  document.getElementById('cardTemp').textContent = city.temp;
+  document.getElementById('cardNDVI').textContent = city.ndvi;
+  document.getElementById('cardAQI').textContent = city.aqi;
+
+  const r = document.getElementById('cardRisk');
+  r.textContent = city.risk + ' RISK';
+  r.className = 'overall-risk ' + city.riskClass;
+
+  document.getElementById('cityCard').classList.add('visible');
+}
+
+function goToDetails() {
+  if (!selectedCity) return;
+  // When Page 2 is ready: window.location.href = 'dashboard.html?city=' + selectedCity.name;
+  alert('Opening detailed analysis for ' + selectedCity.name + '...\n\nThis will navigate to the full dashboard (Page 2)!');
+}
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('searchWrap').contains(e.target)) closeSuggestions();
+});
+</script>
+</body>
+</html>
