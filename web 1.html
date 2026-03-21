@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EarthWatch India — Satellite Environmental Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --green: #2D6A4F;
+    --green-light: #40916C;
+    --green-pale: #D8F3DC;
+    --teal: #1B7A6E;
+    --sky: #E8F4F8;
+    --accent: #F4A261;
+    --accent2: #E76F51;
+    --text: #1A2E22;
+    --text-muted: #5A7A65;
+    --border: #C8E6C9;
+    --white: #FFFFFF;
+    --bg: #F5FAF6;
+    --card: #FFFFFF;
+    --danger: #D62828;
+    --warning: #F4A261;
+    --good: #2D6A4F;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── NAVBAR ─── */
+  nav {
+    background: var(--white);
+    border-bottom: 2px solid var(--border);
+    padding: 0 28px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: 0 2px 12px rgba(45,106,79,0.08);
+    z-index: 1000;
+  }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--green), var(--teal));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: var(--green);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-sub {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-top: -2px;
+  }
+
+  .nav-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .city-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .city-select {
+    appearance: none;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 36px 8px 14px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--green);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%232D6A4F' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    transition: border-color 0.2s;
+    min-width: 160px;
+  }
+  .city-select:focus { outline: none; border-color: var(--green); }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .badge {
+    background: var(--green-pale);
+    color: var(--green);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+
+  .live-dot {
+    width: 8px; height: 8px;
+    background: #4CAF50;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    display: inline-block;
+    margin-right: 6px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+  }
+
+  .report-btn {
+    background: linear-gradient(135deg, var(--green), var(--teal));
+    color: white;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    letter-spacing: 0.2px;
+  }
+  .report-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(45,106,79,0.3); }
+
+  /* ─── MAIN LAYOUT ─── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── LAYER TOOLBAR ─── */
+  .toolbar {
+    background: var(--white);
+    border-bottom: 1.5px solid var(--border);
+    padding: 0 28px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .toolbar-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-right: 8px;
+  }
+
+  .layer-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+
+  .layer-btn.active {
+    background: var(--white);
+    border-color: currentColor;
+    font-weight: 600;
+  }
+
+  .layer-btn .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .layer-btn.heat { --c: #E63946; }
+  .layer-btn.ndvi { --c: #2D6A4F; }
+  .layer-btn.aqi  { --c: #8338EC; }
+  .layer-btn.anomaly { --c: #F4A261; }
+
+  .layer-btn.active { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, white); }
+  .layer-btn.heat .dot { background: #E63946; }
+  .layer-btn.ndvi .dot { background: #2D6A4F; }
+  .layer-btn.aqi  .dot { background: #8338EC; }
+  .layer-btn.anomaly .dot { background: #F4A261; }
+
+  /* ─── CONTENT AREA ─── */
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── MAP ─── */
+  .map-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #map {
+    width: 100%;
+    height: 100%;
+  }
+
+  .map-info-card {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.96);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    width: 220px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    z-index: 800;
+  }
+
+  .map-info-card h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-row:last-child { border-bottom: none; }
+
+  .info-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  .info-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.88rem;
+  }
+
+  .risk-badge {
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .risk-high { background: #FEE2E2; color: #DC2626; }
+  .risk-mid  { background: #FEF3C7; color: #D97706; }
+  .risk-low  { background: #DCFCE7; color: #16A34A; }
+
+  /* ─── BOTTOM CHARTS ─── */
+  .charts-panel {
+    height: 220px;
+    background: var(--white);
+    border-top: 2px solid var(--border);
+    display: flex;
+    gap: 0;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .chart-block {
+    flex: 1;
+    padding: 16px 20px;
+    border-right: 1.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .chart-block:last-child { border-right: none; }
+
+  .chart-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.78rem;
+    color: var(--text);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chart-subtitle {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .chart-canvas-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+
+  /* ─── STATS ROW ─── */
+  .stats-block {
+    width: 260px;
+    flex-shrink: 0;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-right: 1.5px solid var(--border);
+  }
+
+  .stat-card {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stat-icon {
+    font-size: 1.4rem;
+    width: 36px;
+    text-align: center;
+  }
+
+  .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal {
+    background: white;
+    border-radius: 20px;
+    width: 680px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 36px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    transform: translateY(20px);
+    transition: transform 0.2s;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }
+
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.3rem;
+    color: var(--green);
+  }
+
+  .modal-city {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .close-btn {
+    background: var(--bg);
+    border: none;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+  }
+  .close-btn:hover { background: var(--border); }
+
+  .report-section {
+    margin-bottom: 20px;
+    padding: 18px;
+    background: var(--bg);
+    border-radius: 12px;
+    border-left: 4px solid var(--green);
+  }
+  .report-section.warn { border-left-color: var(--warning); }
+  .report-section.danger { border-left-color: var(--danger); }
+
+  .report-section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.88rem;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .report-section p {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .report-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .action-chip {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .generating {
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .generating p {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .download-btn {
+    width: 100%;
+    margin-top: 20px;
+    background: linear-gradient(135deg, var(--green), var(--teal));
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform 0.15s;
+  }
+  .download-btn:hover { transform: translateY(-1px); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav>
+  <div class="nav-left">
+    <div class="logo-icon">🛰️</div>
+    <div>
+      <div class="logo-text">EarthWatch India</div>
+      <div class="logo-sub">Satellite Environmental Intelligence</div>
+    </div>
+  </div>
+
+  <div class="nav-center">
+    <span class="city-label">City</span>
+    <select class="city-select" id="citySelect" onchange="changeCity(this.value)">
+      <option value="mumbai">Mumbai</option>
+      <option value="delhi">Delhi</option>
+      <option value="bengaluru">Bengaluru</option>
+      <option value="pune">Pune</option>
+      <option value="hyderabad">Hyderabad</option>
+      <option value="ahmedabad">Ahmedabad</option>
+      <option value="gandhinagar">Gandhinagar</option>
+      <option value="gurgaon">Gurgaon</option>
+    </select>
+  </div>
+
+  <div class="nav-right">
+    <span class="badge"><span class="live-dot"></span>Live Satellite Feed</span>
+    <span class="badge">MODIS · Sentinel · Landsat</span>
+    <button class="report-btn" onclick="openReport()">📄 Generate Action Plan</button>
+  </div>
+</nav>
+
+<!-- LAYER TOOLBAR -->
+<div class="toolbar">
+  <span class="toolbar-label">Layers</span>
+  <button class="layer-btn heat active" onclick="toggleLayer('heat', this)">
+    <span class="dot"></span> 🌡️ Urban Heat Island
+  </button>
+  <button class="layer-btn ndvi" onclick="toggleLayer('ndvi', this)">
+    <span class="dot"></span> 🌿 NDVI Vegetation
+  </button>
+  <button class="layer-btn aqi" onclick="toggleLayer('aqi', this)">
+    <span class="dot"></span> 💨 Air Quality (NO₂)
+  </button>
+  <button class="layer-btn anomaly" onclick="toggleLayer('anomaly', this)">
+    <span class="dot"></span> ⚠️ Anomaly Zones
+  </button>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+  <div class="content">
+
+    <!-- MAP -->
+    <div class="map-wrapper">
+      <div id="map"></div>
+
+      <!-- Info card top-right -->
+      <div class="map-info-card" id="infoCard">
+        <h4 id="infoCardCity">Mumbai Overview</h4>
+        <div class="info-row">
+          <span class="info-label">Avg Surface Temp</span>
+          <span class="info-value" id="infoTemp" style="color:#E63946">34.2°C</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">NDVI Score</span>
+          <span class="info-value" id="infoNDVI" style="color:#2D6A4F">0.31</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">AQI Level</span>
+          <span class="info-value" id="infoAQI" style="color:#8338EC">168</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Anomalies</span>
+          <span class="info-value" id="infoAnomalies">3 zones</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Overall Risk</span>
+          <span class="risk-badge risk-high" id="infoRisk">HIGH</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM CHARTS -->
+    <div class="charts-panel">
+
+      <!-- Stats -->
+      <div class="stats-block">
+        <div class="chart-title" style="margin-bottom:8px">
+          📍 <span id="statsCity">Mumbai</span>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🌡️</div>
+          <div>
+            <div class="stat-val" id="statTemp">+3.8°C</div>
+            <div class="stat-label">Heat Island Intensity</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🌿</div>
+          <div>
+            <div class="stat-val" id="statNDVI">-12%</div>
+            <div class="stat-label">Vegetation Change (YoY)</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💨</div>
+          <div>
+            <div class="stat-val" id="statAQI">Poor</div>
+            <div class="stat-label">Air Quality Status</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Temperature chart -->
+      <div class="chart-block">
+        <div class="chart-title">🌡️ Surface Temperature</div>
+        <div class="chart-subtitle">Monthly avg · Last 12 months</div>
+        <div class="chart-canvas-wrap">
+          <canvas id="tempChart"></canvas>
+        </div>
+      </div>
+
+      <!-- NDVI chart -->
+      <div class="chart-block">
+        <div class="chart-title">🌿 NDVI Vegetation Index</div>
+        <div class="chart-subtitle">Monthly avg · Last 12 months</div>
+        <div class="chart-canvas-wrap">
+          <canvas id="ndviChart"></canvas>
+        </div>
+      </div>
+
+      <!-- AQI chart -->
+      <div class="chart-block">
+        <div class="chart-title">💨 Air Quality Index</div>
+        <div class="chart-subtitle">Monthly NO₂ levels</div>
+        <div class="chart-canvas-wrap">
+          <canvas id="aqiChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeReportOutside(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🌍 Environment Action Plan</div>
+        <div class="modal-city" id="reportCityLabel">Mumbai Metropolitan Region · March 2026</div>
+      </div>
+      <button class="close-btn" onclick="closeReport()">✕</button>
+    </div>
+    <div id="reportContent">
+      <div class="generating" id="generatingState">
+        <div class="spinner"></div>
+        <p>Analyzing satellite data from MODIS, Sentinel & Landsat...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CITY DATA ───
+const cityData = {
+  mumbai:     { lat: 19.076, lng: 72.877, zoom: 11, temp: "34.2°C", ndvi: "0.31", aqi: "168", anomalies: "3 zones", risk: "HIGH", riskClass: "risk-high", heatIntensity: "+3.8°C", ndviChange: "-12%", aqiStatus: "Poor" },
+  delhi:      { lat: 28.679, lng: 77.069, zoom: 11, temp: "39.1°C", ndvi: "0.18", aqi: "243", anomalies: "6 zones", risk: "CRITICAL", riskClass: "risk-high", heatIntensity: "+5.2°C", ndviChange: "-19%", aqiStatus: "Hazardous" },
+  bengaluru:  { lat: 12.971, lng: 77.594, zoom: 11, temp: "28.4°C", ndvi: "0.44", aqi: "112", anomalies: "1 zone",  risk: "MEDIUM", riskClass: "risk-mid",  heatIntensity: "+2.1°C", ndviChange: "-8%",  aqiStatus: "Moderate" },
+  pune:       { lat: 18.521, lng: 73.854, zoom: 11, temp: "31.6°C", ndvi: "0.37", aqi: "98",  anomalies: "2 zones", risk: "MEDIUM", riskClass: "risk-mid",  heatIntensity: "+2.6°C", ndviChange: "-6%",  aqiStatus: "Moderate" },
+  hyderabad:  { lat: 17.385, lng: 78.487, zoom: 11, temp: "33.8°C", ndvi: "0.29", aqi: "134", anomalies: "3 zones", risk: "HIGH",   riskClass: "risk-high", heatIntensity: "+3.4°C", ndviChange: "-14%", aqiStatus: "Poor" },
+  ahmedabad:  { lat: 23.022, lng: 72.571, zoom: 11, temp: "38.5°C", ndvi: "0.20", aqi: "188", anomalies: "5 zones", risk: "HIGH",   riskClass: "risk-high", heatIntensity: "+4.9°C", ndviChange: "-17%", aqiStatus: "Poor" },
+  gandhinagar:{ lat: 23.216, lng: 72.684, zoom: 12, temp: "36.2°C", ndvi: "0.35", aqi: "122", anomalies: "2 zones", risk: "MEDIUM", riskClass: "risk-mid",  heatIntensity: "+2.9°C", ndviChange: "-9%",  aqiStatus: "Moderate" },
+  gurgaon:    { lat: 28.459, lng: 77.027, zoom: 12, temp: "38.0°C", ndvi: "0.16", aqi: "228", anomalies: "4 zones", risk: "CRITICAL",riskClass: "risk-high", heatIntensity: "+4.8°C", ndviChange: "-22%", aqiStatus: "Hazardous" },
+};
+
+const cityNames = {
+  mumbai: "Mumbai", delhi: "Delhi", bengaluru: "Bengaluru",
+  pune: "Pune", hyderabad: "Hyderabad", ahmedabad: "Ahmedabad",
+  gandhinagar: "Gandhinagar", gurgaon: "Gurgaon"
+};
+
+// ─── CHART DATA ───
+const chartDataByCity = {
+  mumbai:     { temp: [31,32,34,36,38,37,33,31,30,31,33,34], ndvi: [0.38,0.36,0.33,0.30,0.28,0.27,0.31,0.34,0.36,0.35,0.33,0.31], aqi: [120,130,155,170,168,145,138,142,150,160,172,168] },
+  delhi:      { temp: [20,24,30,37,41,40,36,35,34,32,26,21], ndvi: [0.22,0.20,0.18,0.16,0.14,0.20,0.25,0.26,0.24,0.22,0.20,0.18], aqi: [200,220,190,180,160,140,150,160,190,230,250,243] },
+  bengaluru:  { temp: [24,26,28,29,30,28,26,26,26,25,24,24], ndvi: [0.50,0.48,0.46,0.44,0.42,0.45,0.48,0.50,0.49,0.47,0.46,0.44], aqi: [90,95,105,112,108,100,98,95,100,110,115,112] },
+  pune:       { temp: [26,28,32,34,36,34,29,28,28,28,27,26], ndvi: [0.42,0.40,0.38,0.36,0.34,0.38,0.42,0.44,0.42,0.40,0.38,0.37], aqi: [80,85,92,98,95,88,82,80,85,92,96,98] },
+  hyderabad:  { temp: [26,29,33,36,38,36,30,29,29,28,27,26], ndvi: [0.34,0.32,0.30,0.28,0.26,0.30,0.34,0.36,0.34,0.32,0.30,0.29], aqi: [100,110,120,134,130,120,115,112,118,125,130,134] },
+  ahmedabad:  { temp: [24,28,34,38,41,40,35,33,32,30,26,23], ndvi: [0.24,0.22,0.21,0.20,0.18,0.22,0.26,0.28,0.26,0.24,0.22,0.20], aqi: [160,170,180,188,184,170,162,158,165,175,182,188] },
+  gandhinagar:{ temp: [22,26,32,36,38,37,33,31,30,28,24,22], ndvi: [0.40,0.38,0.37,0.36,0.33,0.36,0.40,0.42,0.40,0.38,0.36,0.35], aqi: [100,108,116,122,118,110,105,102,108,115,120,122] },
+  gurgaon:    { temp: [19,23,30,37,41,40,36,35,33,30,24,20], ndvi: [0.20,0.18,0.17,0.16,0.14,0.18,0.22,0.24,0.22,0.20,0.18,0.16], aqi: [190,200,210,228,222,200,195,198,208,220,230,228] },
+};
+
+const months = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+
+// ─── MAP SETUP ───
+let map = L.map('map', { zoomControl: true }).setView([19.076, 72.877], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// ─── HEAT ZONES (Mock) ───
+let heatCircles = [], ndviCircles = [], aqiCircles = [], anomalyMarkers = [];
+let activeLayers = { heat: true, ndvi: false, aqi: false, anomaly: false };
+
+function makeHeatZones(lat, lng) {
+  const offsets = [
+    [0.02, 0.01], [-0.01, 0.03], [0.03, -0.02],
+    [-0.02, -0.01], [0.01, -0.03], [0.04, 0.02]
+  ];
+  const intensities = [38, 42, 36, 44, 39, 41];
+  return offsets.map((o, i) => L.circle([lat + o[0], lng + o[1]], {
+    color: 'transparent', fillColor: '#E63946',
+    fillOpacity: 0.25 + (i % 3) * 0.1,
+    radius: 1800 + i * 400
+  }));
+}
+
+function makeNDVIZones(lat, lng) {
+  const offsets = [
+    [0.03, -0.04], [-0.03, 0.02], [0.01, 0.04],
+    [-0.04, -0.03], [0.05, 0.01]
+  ];
+  return offsets.map((o, i) => L.circle([lat + o[0], lng + o[1]], {
+    color: 'transparent', fillColor: '#2D6A4F',
+    fillOpacity: 0.2 + (i % 2) * 0.1,
+    radius: 1500 + i * 300
+  }));
+}
+
+function makeAQIZones(lat, lng) {
+  const offsets = [
+    [0.01, 0.02], [-0.02, -0.02], [0.04, -0.01],
+    [0.02, -0.04], [-0.01, 0.04]
+  ];
+  return offsets.map((o, i) => L.circle([lat + o[0], lng + o[1]], {
+    color: 'transparent', fillColor: '#8338EC',
+    fillOpacity: 0.18 + (i % 3) * 0.08,
+    radius: 2000 + i * 300
+  }));
+}
+
+function makeAnomalyMarkers(lat, lng, count) {
+  const offsets = [[0.02,0.03],[-0.03,-0.01],[0.04,-0.03],[-0.01,0.05],[0.05,0.01],[0.03,0.04]];
+  const icons = ['🔴','🔴','🟠','🔴','🟠','🔴'];
+  return offsets.slice(0, count).map((o, i) =>
+    L.marker([lat + o[0], lng + o[1]], {
+      icon: L.divIcon({
+        html: `<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${icons[i]}</div>`,
+        className: '', iconAnchor: [11, 11]
+      })
+    }).bindPopup(`<b>Anomaly Zone ${i+1}</b><br>Detected by Isolation Forest<br><small>Satellite: MODIS Terra</small>`)
+  );
+}
+
+let currentCity = 'mumbai';
+
+function renderLayers(city) {
+  const d = cityData[city];
+  // Clear all
+  [...heatCircles, ...ndviCircles, ...aqiCircles, ...anomalyMarkers].forEach(l => map.removeLayer(l));
+  heatCircles = makeHeatZones(d.lat, d.lng);
+  ndviCircles = makeNDVIZones(d.lat, d.lng);
+  aqiCircles  = makeAQIZones(d.lat, d.lng);
+  const anomalyCount = parseInt(d.anomalies);
+  anomalyMarkers = makeAnomalyMarkers(d.lat, d.lng, anomalyCount);
+
+  if (activeLayers.heat)    heatCircles.forEach(c => c.addTo(map));
+  if (activeLayers.ndvi)    ndviCircles.forEach(c => c.addTo(map));
+  if (activeLayers.aqi)     aqiCircles.forEach(c => c.addTo(map));
+  if (activeLayers.anomaly) anomalyMarkers.forEach(m => m.addTo(map));
+}
+
+function toggleLayer(type, btn) {
+  activeLayers[type] = !activeLayers[type];
+  btn.classList.toggle('active', activeLayers[type]);
+  const d = cityData[currentCity];
+  if (type === 'heat')    heatCircles.forEach(c => activeLayers.heat    ? c.addTo(map) : map.removeLayer(c));
+  if (type === 'ndvi')    ndviCircles.forEach(c => activeLayers.ndvi    ? c.addTo(map) : map.removeLayer(c));
+  if (type === 'aqi')     aqiCircles.forEach(c  => activeLayers.aqi     ? c.addTo(map) : map.removeLayer(c));
+  if (type === 'anomaly') anomalyMarkers.forEach(m => activeLayers.anomaly ? m.addTo(map) : map.removeLayer(m));
+}
+
+function updateInfoCard(city) {
+  const d = cityData[city];
+  document.getElementById('infoCardCity').textContent = cityNames[city] + ' Overview';
+  document.getElementById('infoTemp').textContent = d.temp;
+  document.getElementById('infoNDVI').textContent = d.ndvi;
+  document.getElementById('infoAQI').textContent = d.aqi;
+  document.getElementById('infoAnomalies').textContent = d.anomalies;
+  const riskEl = document.getElementById('infoRisk');
+  riskEl.textContent = d.risk;
+  riskEl.className = 'risk-badge ' + d.riskClass;
+  document.getElementById('statsCity').textContent = cityNames[city];
+  document.getElementById('statTemp').textContent = d.heatIntensity;
+  document.getElementById('statNDVI').textContent = d.ndviChange;
+  document.getElementById('statAQI').textContent = d.aqiStatus;
+}
+
+function changeCity(city) {
+  currentCity = city;
+  const d = cityData[city];
+  map.flyTo([d.lat, d.lng], d.zoom, { duration: 1.4 });
+  renderLayers(city);
+  updateInfoCard(city);
+  updateCharts(city);
+}
+
+// ─── CHARTS ───
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#5A7A65' } },
+    y: { grid: { color: '#E8F4F8' }, ticks: { font: { size: 10 }, color: '#5A7A65' } }
+  }
+};
+
+let tempChart, ndviChart, aqiChart;
+
+function initCharts() {
+  const d = chartDataByCity['mumbai'];
+
+  tempChart = new Chart(document.getElementById('tempChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{ data: d.temp, borderColor: '#E63946', backgroundColor: 'rgba(230,57,70,0.08)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#E63946' }]
+    },
+    options: { ...chartDefaults }
+  });
+
+  ndviChart = new Chart(document.getElementById('ndviChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{ data: d.ndvi, borderColor: '#2D6A4F', backgroundColor: 'rgba(45,106,79,0.08)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#2D6A4F' }]
+    },
+    options: { ...chartDefaults }
+  });
+
+  aqiChart = new Chart(document.getElementById('aqiChart'), {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [{ data: d.aqi, backgroundColor: months.map((_, i) => d.aqi[i] > 200 ? 'rgba(214,40,40,0.7)' : d.aqi[i] > 150 ? 'rgba(244,162,97,0.7)' : 'rgba(131,56,236,0.5)'), borderRadius: 4 }]
+    },
+    options: { ...chartDefaults }
+  });
+}
+
+function updateCharts(city) {
+  const d = chartDataByCity[city];
+  tempChart.data.datasets[0].data = d.temp;
+  ndviChart.data.datasets[0].data = d.ndvi;
+  aqiChart.data.datasets[0].data = d.aqi;
+  aqiChart.data.datasets[0].backgroundColor = months.map((_, i) => d.aqi[i] > 200 ? 'rgba(214,40,40,0.7)' : d.aqi[i] > 150 ? 'rgba(244,162,97,0.7)' : 'rgba(131,56,236,0.5)');
+  tempChart.update(); ndviChart.update(); aqiChart.update();
+}
+
+// ─── REPORT MODAL ───
+const reportTemplates = {
+  mumbai: {
+    heat: { level: "danger", emoji: "🌡️", title: "Urban Heat Island — CRITICAL", body: "Mumbai's coastal zones show a persistent heat island intensity of +3.8°C above baseline. The highest anomaly zones are detected in Dharavi, Kurla, and Andheri East, with surface temperatures reaching 42°C in July. Cause: dense concrete cover, low albedo rooftops, and loss of mangrove buffers.", actions: ["Deploy 15,000 cool rooftop programs", "Restore Aarey Forest buffer zones", "Mandate green rooftops for buildings >5000 sqm"] },
+    ndvi:  { level: "warn", emoji: "🌿", title: "Vegetation Decline — WARNING", body: "NDVI has dropped 12% year-over-year, primarily in the eastern suburbs. Satellite imagery confirms significant canopy loss in Borivali fringe areas and wetland conversion near Thane Creek. Urban expansion is the primary driver.", actions: ["Plant 2M trees in eastern suburbs by 2027", "Halt wetland conversion permits", "Create green corridors linking Sanjay Gandhi NP"] },
+    aqi:   { level: "warn", emoji: "💨", title: "Air Quality — POOR (AQI 168)", body: "NO₂ concentration has increased 18% over the past year. Hotspots identified near the Eastern Freeway, Govandi, and Chembur industrial cluster. Seasonal variation shows worst conditions in November–February.", actions: ["EV transition mandate for 2-wheelers by 2026", "Industrial emission audit in Chembur cluster", "Real-time pollution monitoring at 50 new stations"] },
+  },
+  delhi: {
+    heat: { level: "danger", emoji: "🌡️", title: "Urban Heat Island — EXTREME", body: "Delhi shows India's most severe urban heat island at +5.2°C. The entire NCT is a consolidated heat dome. Hotspots in Rohini, Dwarka, and Okhla show temperatures exceeding 46°C in peak summer.", actions: ["Emergency cool corridor project along Ring Road", "Mandatory albedo standards for all new construction", "Night-time cooling shelters in 200 urban pockets"] },
+    ndvi:  { level: "danger", emoji: "🌿", title: "Vegetation — CRITICAL LOSS", body: "19% NDVI decline detected. Delhi's per capita green space is now below WHO's 9 sqm minimum. Satellite analysis shows Yamuna floodplain vegetation reduced by 34% since 2018.", actions: ["Yamuna restoration emergency program", "Urban forest mandate: 1 tree per 100 sqm of new construction", "Protect remaining ridge forests from encroachment"] },
+    aqi:   { level: "danger", emoji: "💨", title: "Air Quality — HAZARDOUS (AQI 243)", body: "Delhi consistently records the worst AQI among monitored cities. Winter smog events (Nov–Jan) hit AQI 400+. Primary contributors: vehicular emissions 40%, stubble burning 25%, industrial 20%.", actions: ["Graded Response Action Plan enforcement", "Transition to 100% EV public buses by 2027", "Stubble management support for Punjab/Haryana farmers"] },
+  },
+};
+
+// fallback for cities without detailed data
+function getReport(city) {
+  return reportTemplates[city] || reportTemplates['mumbai'];
+}
+
+function openReport() {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('open');
+  document.getElementById('reportCityLabel').textContent = cityNames[currentCity] + ' Metropolitan Region · March 2026';
+  document.getElementById('reportContent').innerHTML = `
+    <div class="generating" id="generatingState">
+      <div class="spinner"></div>
+      <p>Analyzing satellite data from MODIS, Sentinel & Landsat...</p>
+    </div>`;
+
+  setTimeout(() => {
+    const r = getReport(currentCity);
+    const city = cityNames[currentCity];
+    document.getElementById('reportContent').innerHTML = `
+      <div class="report-section ${r.heat.level}">
+        <div class="report-section-title">${r.heat.emoji} ${r.heat.title}</div>
+        <p>${r.heat.body}</p>
+        <div class="report-actions">${r.heat.actions.map(a => `<span class="action-chip">→ ${a}</span>`).join('')}</div>
+      </div>
+      <div class="report-section ${r.ndvi.level}">
+        <div class="report-section-title">${r.ndvi.emoji} ${r.ndvi.title}</div>
+        <p>${r.ndvi.body}</p>
+        <div class="report-actions">${r.ndvi.actions.map(a => `<span class="action-chip">→ ${a}</span>`).join('')}</div>
+      </div>
+      <div class="report-section ${r.aqi.level}">
+        <div class="report-section-title">${r.aqi.emoji} ${r.aqi.title}</div>
+        <p>${r.aqi.body}</p>
+        <div class="report-actions">${r.aqi.actions.map(a => `<span class="action-chip">→ ${a}</span>`).join('')}</div>
+      </div>
+      <button class="download-btn" onclick="alert('PDF download will connect to backend export API')">⬇️ Download as PDF Report</button>
+    `;
+  }, 2000);
+}
+
+function closeReport() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function closeReportOutside(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeReport();
+}
+
+// ─── INIT ───
+renderLayers('mumbai');
+updateInfoCard('mumbai');
+initCharts();
+</script>
+</body>
+</html>
