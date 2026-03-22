@@ -283,11 +283,11 @@ Open: **http://localhost:5000**
 
 ## 👥 Team
 Built for **Sustainable Environment — Problem Statement 4**
-<h1>**Lakkad Vanshik**
-**Harshil Gajera**
-**Kathiriya Meet**
-**Vamja Fenil**
-**Kothari Divisha**
+<h1>Lakkad Vanshik
+Harshil Gajera
+Kathiriya Meet
+Vamja Fenil
+Kothari Divisha
 </h1>
 
 
