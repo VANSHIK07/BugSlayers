@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GreenGrid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --green-dark:#1B4332; --green:#2D6A4F; --green-mid:#40916C;
+    --green-lite:#74C69D; --white:#FFFFFF; --text:#0D1F16; --muted:#5A7A65;
+  }
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:var(--green-dark);}
+
+  #map{position:fixed;inset:0;z-index:0;filter:saturate(0.7) brightness(0.82);transition:filter 1.4s ease;}
+  #map.focused{filter:saturate(1.15) brightness(0.88);}
+  .overlay{position:fixed;inset:0;z-index:1;background:linear-gradient(180deg,rgba(13,31,22,0.6) 0%,rgba(13,31,22,0.2) 45%,rgba(13,31,22,0.6) 100%);pointer-events:none;}
+
+  /* ── TOPBAR ── */
+  .topbar{position:fixed;top:0;left:0;right:0;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;z-index:20;}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--green-mid),var(--green-lite));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 16px rgba(45,106,79,0.4);}
+  .logo-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--white);line-height:1;}
+  .logo-tagline{font-size:0.6rem;color:var(--green-lite);letter-spacing:2px;text-transform:uppercase;font-weight:500;}
+  .topbar-right{display:flex;align-items:center;gap:10px;}
+  .nav-btn{padding:8px 22px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:0.3px;}
+  .btn-login{background:rgba(255,255,255,0.12);backdrop-filter:blur(8px);border:1.5px solid rgba(255,255,255,0.3);color:white;}
+  .btn-login:hover{background:rgba(255,255,255,0.22);}
+  .btn-signup{background:linear-gradient(135deg,var(--green-mid),var(--green-lite));border:none;color:white;box-shadow:0 4px 14px rgba(64,145,108,0.4);}
+  .btn-signup:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(64,145,108,0.5);}
+  .user-pill{display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.1);backdrop-filter:blur(8px);border:1.5px solid rgba(255,255,255,0.2);border-radius:24px;padding:6px 14px 6px 8px;}
+  .user-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--green-mid),var(--green-lite));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0;}
+  .user-name{font-size:0.82rem;font-weight:600;color:white;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .user-pill.show{display:flex;}
+  .btn-signout{padding:7px 16px;border-radius:10px;background:rgba(220,38,38,0.15);border:1.5px solid rgba(220,38,38,0.3);color:#FCA5A5;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:none;}
+  .btn-signout:hover{background:rgba(220,38,38,0.28);}
+  .btn-signout.show{display:block;}
+
+  /* ── HERO ── */
+  .ui{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .hero{display:flex;flex-direction:column;align-items:center;gap:24px;animation:fadeUp 0.8s ease both;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+  .hero-top{display:flex;flex-direction:column;align-items:center;gap:16px;transition:opacity 0.5s ease, max-height 0.5s ease, gap 0.5s ease;}
+  .hero-top.hidden{opacity:0;pointer-events:none;max-height:0;overflow:hidden;gap:0;}
+  .hero-label{font-family:'Space Mono',monospace;font-size:0.72rem;letter-spacing:3px;text-transform:uppercase;color:#fff;background:rgba(45,90,61,0.75);border:1px solid rgba(45,90,61,0.5);padding:6px 16px;border-radius:20px;animation:fadeUp 0.8s 0.1s ease both;}
+  .hero-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,8vw,6.5rem);color:var(--white);text-align:center;line-height:0.95;letter-spacing:3px;text-shadow:0 4px 32px rgba(0,0,0,0.4);animation:fadeUp 0.8s 0.2s ease both;}
+  .hero-title span{color:var(--green-lite);}
+  .hero-sub{font-size:0.95rem;color:#fff;text-align:center;max-width:420px;line-height:1.7;font-weight:700;animation:fadeUp 0.8s 0.3s ease both;text-shadow:0 1px 4px rgba(0,0,0,0.8);}
+
+  /* ── VR DROPDOWNS (exact vr.html) ── */
+  .dropdowns-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;animation:fadeUp 0.8s 0.4s ease both;}
+  .dropdowns-wrap.hidden{display:none;}
+  .dropdown-row{display:flex;flex-direction:column;gap:5px;width:380px;}
+  .dropdown-label{font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.6);padding-left:4px;}
+  .styled-select{width:100%;appearance:none;background:rgba(255,255,255,0.95);backdrop-filter:blur(16px);border:2px solid rgba(255,255,255,0.3);border-radius:14px;padding:14px 44px 14px 18px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:600;color:var(--text);outline:none;cursor:pointer;transition:all 0.25s;box-shadow:0 8px 32px rgba(0,0,0,0.2);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231B4332' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;}
+  .styled-select:focus{border-color:var(--green-mid);box-shadow:0 8px 32px rgba(0,0,0,0.2),0 0 0 4px rgba(64,145,108,0.2);}
+  .styled-select:disabled{opacity:0.5;cursor:not-allowed;}
+  .styled-select option{font-weight:500;}
+  .city-card{position:fixed;bottom:24px;right:24px;background:rgba(255,255,255,0.96);backdrop-filter:blur(16px);border-radius:18px;padding:22px 24px;width:360px;box-shadow:0 12px 40px rgba(0,0,0,0.22);display:none;z-index:50;}
+  .city-card.visible{display:block;animation:fadeUp 0.4s ease both;}
+  .city-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;}
+  .card-header-left{flex:1;}
+  .city-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--green-dark);line-height:1;}
+  .city-card-state{font-size:0.7rem;color:var(--muted);margin-top:2px;font-weight:500;}
+  .card-header-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .overall-risk{padding:4px 10px;border-radius:8px;font-family:'Space Mono',monospace;font-size:0.65rem;font-weight:700;letter-spacing:1px;}
+  .card-close{background:none;border:none;cursor:pointer;color:#b0b0b0;font-size:1rem;padding:2px 4px;border-radius:50%;transition:color 0.2s,background 0.2s;}
+  .card-close:hover{color:#555;background:rgba(0,0,0,0.06);}
+  .city-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px;}
+  .stat-box{background:#F5FAF6;border-radius:10px;padding:8px 10px;text-align:center;}
+  .stat-box-icon{font-size:1rem;margin-bottom:2px;}
+  .stat-box-val{font-family:'Space Mono',monospace;font-size:0.82rem;font-weight:700;color:var(--green-dark);line-height:1;}
+  .stat-box-label{font-size:0.58rem;color:var(--muted);margin-top:2px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;}
+  .show-btn{width:100%;background:linear-gradient(135deg,var(--green-dark),var(--green));color:white;border:none;padding:12px;border-radius:11px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:transform 0.15s,box-shadow 0.15s;box-shadow:0 4px 20px rgba(27,67,50,0.35);}
+  .show-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(27,67,50,0.45);}
+  .btn-arrow{transition:transform 0.2s;}
+  .show-btn:hover .btn-arrow{transform:translateX(4px);}
+
+  /* ── SAT BADGE ── */
+  .sat-badge{position:fixed;bottom:28px;left:24px;background:rgba(13,31,22,0.75);backdrop-filter:blur(8px);border:1px solid rgba(116,198,157,0.2);border-radius:10px;padding:10px 14px;z-index:20;animation:fadeUp 1s 0.8s ease both;}
+  .sat-badge-title{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--green-lite);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;}
+  .sat-item{font-size:0.68rem;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:6px;margin-top:3px;}
+  .sat-dot{width:5px;height:5px;border-radius:50%;background:#4ade80;animation:blink 2s infinite;flex-shrink:0;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+  .leaflet-control-zoom{display:none;}
+  .leaflet-control-attribution{font-size:9px;opacity:0.4;}
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-thumb{background:#C8E6C9;border-radius:2px;}
+  .gmaps-tooltip{background:white!important;border:none!important;border-radius:8px!important;box-shadow:0 2px 12px rgba(0,0,0,0.2)!important;padding:6px 10px!important;font-family:'DM Sans',sans-serif!important;font-size:13px!important;color:#1a1a1a!important;white-space:nowrap;}
+  .gmaps-tooltip::before{display:none!important;}
+
+  /* ── LOGIN REQUIRED TOAST ── */
+  .toast-backdrop{position:fixed;inset:0;z-index:149;background:rgba(0,0,0,0.4);backdrop-filter:blur(3px);display:none;}
+  .toast-backdrop.show{display:block;}
+  .login-toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.9);z-index:150;background:rgba(15,36,25,0.97);backdrop-filter:blur(16px);border:1px solid rgba(116,198,157,0.25);border-radius:22px;padding:28px 32px;width:340px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:all 0.25s cubic-bezier(0.34,1.3,0.64,1);}
+  .login-toast.show{opacity:1;pointer-events:all;transform:translate(-50%,-50%) scale(1);}
+  .toast-icon{font-size:2.4rem;margin-bottom:12px;display:block;}
+  .toast-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px;color:white;margin-bottom:6px;}
+  .toast-sub{font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:20px;}
+  .toast-btns{display:flex;gap:10px;}
+  .toast-btn-login{flex:1;padding:11px;border-radius:11px;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.25);color:white;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s;}
+  .toast-btn-login:hover{background:rgba(255,255,255,0.18);}
+  .toast-btn-signup{flex:1;padding:11px;border-radius:11px;background:linear-gradient(135deg,var(--green-mid),var(--green-lite));border:none;color:white;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 14px rgba(64,145,108,0.4);}
+  .toast-btn-signup:hover{transform:translateY(-1px);}
+  .toast-dismiss{display:block;margin-top:14px;font-size:0.72rem;color:rgba(255,255,255,0.3);cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;width:100%;}
+  .toast-dismiss:hover{color:rgba(255,255,255,0.5);}
+
+  /* ══ AUTH MODAL ══ */
+  .modal-backdrop{position:fixed;inset:0;z-index:200;background:rgba(10,24,16,0.75);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:20px;}
+  .modal-backdrop.open{display:flex;animation:bdFade 0.2s ease both;}
+  @keyframes bdFade{from{opacity:0}to{opacity:1}}
+  .auth-modal{background:white;border-radius:24px;width:100%;max-width:420px;box-shadow:0 32px 80px rgba(0,0,0,0.45);overflow:hidden;animation:modalUp 0.3s cubic-bezier(0.34,1.25,0.64,1) both;}
+  @keyframes modalUp{from{opacity:0;transform:translateY(32px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+  .modal-header{background:linear-gradient(135deg,var(--green-dark),var(--green-mid));padding:22px 26px 18px;position:relative;}
+  .modal-close{position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.15);border:none;color:white;width:30px;height:30px;border-radius:50%;font-size:0.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+  .modal-close:hover{background:rgba(255,255,255,0.28);}
+  .modal-logo-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .modal-logo-icon{width:26px;height:26px;background:rgba(255,255,255,0.18);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;}
+  .modal-brand{font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:2px;color:white;}
+  .modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.85rem;letter-spacing:2px;color:white;line-height:1;}
+  .modal-sub{font-size:0.78rem;color:rgba(255,255,255,0.6);margin-top:3px;}
+  .modal-tabs{display:flex;background:#F0F4F1;}
+  .modal-tab{flex:1;padding:11px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;border:none;background:transparent;cursor:pointer;color:#9CA3AF;transition:all 0.2s;border-bottom:2.5px solid transparent;}
+  .modal-tab.active{color:var(--green-dark);border-bottom-color:var(--green-mid);background:white;}
+  .modal-body{padding:22px 26px 26px;}
+  .divider{display:flex;align-items:center;gap:10px;margin:0 0 15px;}
+  .divider-line{flex:1;height:1px;background:#E5E7EB;}
+  .divider-text{font-size:0.7rem;color:#9CA3AF;font-weight:500;white-space:nowrap;}
+  .form-group{margin-bottom:13px;position:relative;}
+  .form-label{display:block;font-size:0.77rem;font-weight:600;color:var(--text);margin-bottom:5px;}
+  .form-input{width:100%;padding:11px 40px 11px 13px;border:1.5px solid #E5E7EB;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:0.9rem;color:var(--text);outline:none;transition:all 0.2s;background:white;}
+  .form-input::placeholder{color:#9CA3AF;}
+  .form-input:focus{border-color:var(--green-mid);box-shadow:0 0 0 3px rgba(64,145,108,0.1);}
+  .form-input.inp-err{border-color:#DC2626;box-shadow:0 0 0 3px rgba(220,38,38,0.08);}
+  .toggle-pass{position:absolute;right:12px;bottom:11px;background:none;border:none;cursor:pointer;font-size:1rem;color:#9CA3AF;padding:0;line-height:1;}
+  .forgot-btn{display:block;text-align:right;font-size:0.72rem;color:var(--green-mid);font-weight:600;background:none;border:none;cursor:pointer;padding:0;margin-top:-6px;margin-bottom:13px;width:100%;}
+  .forgot-btn:hover{color:var(--green-dark);}
+  .remember-row{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .remember-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--green-mid);cursor:pointer;}
+  .remember-row label{font-size:0.76rem;color:var(--muted);cursor:pointer;font-weight:500;}
+  .strength-bar{height:3px;background:#E5E7EB;border-radius:3px;margin-top:6px;overflow:hidden;}
+  .strength-fill{height:100%;border-radius:3px;width:0%;transition:all 0.3s;}
+  .strength-lbl{font-size:0.63rem;margin-top:3px;min-height:12px;}
+  .terms-txt{font-size:0.68rem;color:#9CA3AF;margin:8px 0 12px;line-height:1.5;}
+  .terms-txt a{color:var(--green-mid);text-decoration:none;font-weight:600;}
+  .perks-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .perk{font-size:0.68rem;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:4px;}
+  .perk::before{content:'✓';background:#DCFCE7;color:#16A34A;width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex-shrink:0;}
+  .btn-submit{width:100%;background:linear-gradient(135deg,var(--green-dark),var(--green-mid));color:white;border:none;padding:13px;border-radius:11px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:3px;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 18px rgba(27,67,50,0.3);display:flex;align-items:center;justify-content:center;gap:8px;}
+  .btn-submit:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(27,67,50,0.42);}
+  .btn-submit:disabled{opacity:0.6;cursor:not-allowed;transform:none;}
+  .auth-msg{display:none;padding:9px 12px;border-radius:9px;font-size:0.77rem;font-weight:500;margin-bottom:13px;align-items:center;gap:7px;line-height:1.4;}
+  .auth-msg.show{display:flex;}
+  .auth-msg.is-error{background:rgba(220,38,38,0.07);border:1px solid rgba(220,38,38,0.18);color:#B91C1C;}
+  .auth-msg.is-success{background:rgba(22,163,74,0.07);border:1px solid rgba(22,163,74,0.18);color:#15803D;}
+  .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;display:none;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .switch-link{text-align:center;font-size:0.78rem;color:#9CA3AF;margin-top:14px;}
+  .switch-link button{background:none;border:none;color:var(--green-mid);font-weight:600;font-size:0.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;}
+  .switch-link button:hover{color:var(--green-dark);}
+
+  /* ── SAVED USERS LIST ── */
+  .saved-users-wrap{margin-bottom:14px;display:none;}
+  .saved-users-wrap.show{display:block;}
+  .saved-users-label{font-size:0.7rem;color:#9CA3AF;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;}
+  .saved-users-list{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;}
+  .saved-user-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:10px;cursor:pointer;transition:all 0.15s;background:white;}
+  .saved-user-item:hover{border-color:var(--green-mid);background:#F5FAF6;}
+  .saved-user-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--green-mid),var(--green-lite));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;}
+  .saved-user-info{flex:1;min-width:0;}
+  .saved-user-name{font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .saved-user-email{font-size:0.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .saved-user-arrow{font-size:0.8rem;color:#9CA3AF;flex-shrink:0;}
+  .saved-users-divider{display:flex;align-items:center;gap:8px;margin:10px 0;}
+  .saved-users-divider-line{flex:1;height:1px;background:#E5E7EB;}
+  .saved-users-divider-text{font-size:0.68rem;color:#9CA3AF;white-space:nowrap;}
+
+  /* ── VR DROPDOWNS (exact vr.html) ── */
+  .dropdowns-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;animation:fadeUp 0.8s 0.4s ease both;}
+  .dropdowns-wrap.hidden{display:none;}
+  .dropdown-row{display:flex;flex-direction:column;gap:5px;width:380px;}
+  .dropdown-label{font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.6);padding-left:4px;}
+  .styled-select{width:100%;appearance:none;background:rgba(255,255,255,0.95);backdrop-filter:blur(16px);border:2px solid rgba(255,255,255,0.3);border-radius:14px;padding:14px 44px 14px 18px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:600;color:var(--text);outline:none;cursor:pointer;transition:all 0.25s;box-shadow:0 8px 32px rgba(0,0,0,0.2);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231B4332' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;}
+  .styled-select:focus{border-color:var(--green-mid);box-shadow:0 8px 32px rgba(0,0,0,0.2),0 0 0 4px rgba(64,145,108,0.2);}
+  .styled-select:disabled{opacity:0.5;cursor:not-allowed;}
+  .styled-select option{font-weight:500;}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="overlay"></div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🛰️</div>
+    <div>
+      <div class="logo-name">GREENGRID</div>
+      <div class="logo-tagline">Satellite Environmental Intelligence</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="nav-btn btn-login"  id="btnLogin"  onclick="openModal('login')">Login</button>
+    <button class="nav-btn btn-signup" id="btnSignup" onclick="openModal('signup')">Sign Up</button>
+    <div class="user-pill" id="userPill">
+      <div class="user-avatar" id="userAvatar"></div>
+      <span class="user-name" id="userName"></span>
+    </div>
+    <button class="nav-btn btn-signout" id="btnSignout" onclick="doSignOut()">Sign Out</button>
+  </div>
+</div>
+
+<!-- HERO + DROPDOWNS (exact vr.html UI) -->
+<div class="ui">
+  <div class="hero">
+
+    <!-- Hero title — hides when area is selected -->
+    <div class="hero-top" id="heroTop">
+      <div class="hero-label">🌍 Real-Time Environmental Monitoring</div>
+      <div class="hero-title">See Your City<br>From <span>Space</span></div>
+      <div class="hero-sub">Satellite data from ISRO, NASA & ESA — analyzed instantly for heat islands, air quality & vegetation health.</div>
+    </div>
+
+    <!-- VR Dropdowns (exact from vr.html) -->
+    <div class="dropdowns-wrap" id="dropdownsWrap">
+
+      <div class="dropdown-row">
+        <div class="dropdown-label">Select City</div>
+        <select class="styled-select" id="citySelect" onchange="onCityChange(this.value)"
+          onclick="if(!getSession()){showLoginToast();this.value='';return;}">
+          <option value="">— Choose a city —</option>
+          <option value="Ahmedabad">Ahmedabad</option>
+          <option value="Gandhinagar">Gandhinagar</option>
+        </select>
+      </div>
+
+      <div class="dropdown-row">
+        <div class="dropdown-label">Select Area</div>
+        <select class="styled-select" id="areaSelect" onchange="onAreaChange(this.value)" disabled>
+          <option value="">— Select city first —</option>
+        </select>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- CITY CARD (bottom-right, VR style) -->
+<div class="city-card" id="cityCard">
+  <div class="city-card-header">
+    <div class="card-header-left">
+      <div class="city-card-name" id="cardName"></div>
+      <div class="city-card-state" id="cardState"></div>
+    </div>
+    <div class="card-header-right">
+      <span class="overall-risk" id="cardRisk"></span>
+      <button class="card-close" onclick="resetSearch()" title="Search another city">✕</button>
+    </div>
+  </div>
+  <div class="city-stats">
+    <div class="stat-box"><div class="stat-box-icon">🌡️</div><div class="stat-box-val" id="cardTemp"></div><div class="stat-box-label">Surface Temp</div></div>
+    <div class="stat-box"><div class="stat-box-icon">🌿</div><div class="stat-box-val" id="cardNDVI"></div><div class="stat-box-label">NDVI Score</div></div>
+    <div class="stat-box"><div class="stat-box-icon">💨</div><div class="stat-box-val" id="cardAQI"></div><div class="stat-box-label">AQI Level</div></div>
+  </div>
+  <button class="show-btn" onclick="goToDetails()">
+    View Full Analysis <span class="btn-arrow">→</span>
+  </button>
+</div>
+
+<!-- SAT BADGE -->
+<div class="sat-badge">
+  <div class="sat-badge-title">Live Data Sources</div>
+  <div class="sat-item"><span class="sat-dot"></span>ISRO Bhuvan · India</div>
+  <div class="sat-item"><span class="sat-dot"></span>NASA MODIS · Global</div>
+  <div class="sat-item"><span class="sat-dot"></span>ESA Sentinel · Europe</div>
+</div>
+
+<!-- LOGIN REQUIRED TOAST -->
+<div class="toast-backdrop" id="toastBackdrop" onclick="dismissToast()"></div>
+<div class="login-toast" id="loginToast">
+  <span class="toast-icon">🔒</span>
+  <div class="toast-title">Login Required</div>
+  <div class="toast-sub">You need to be logged in to search cities and access environmental data.</div>
+  <div class="toast-btns">
+    <button class="toast-btn-login"  onclick="dismissToast();openModal('login')">Login</button>
+    <button class="toast-btn-signup" onclick="dismissToast();openModal('signup')">Sign Up Free</button>
+  </div>
+  <button class="toast-dismiss" onclick="dismissToast()">Dismiss</button>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-backdrop" id="authModal" onclick="handleBackdropClick(event)">
+  <div class="auth-modal">
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="modal-logo-row">
+        <div class="modal-logo-icon">🛰️</div>
+        <span class="modal-brand">GREENGRID</span>
+      </div>
+      <div class="modal-title" id="modalTitle">Welcome Back</div>
+      <div class="modal-sub"   id="modalSub">Sign in to your account</div>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tabLogin"  onclick="switchTab('login')">Login</button>
+      <button class="modal-tab"        id="tabSignup" onclick="switchTab('signup')">Sign Up</button>
+    </div>
+    <div class="modal-body">
+      <div class="auth-msg is-error"   id="authError"><span>⚠️</span><span id="authErrTxt"></span></div>
+      <div class="auth-msg is-success" id="authOk"   ><span>✅</span><span id="authOkTxt"></span></div>
+
+      <!-- LOGIN -->
+      <div id="loginPanel">
+        <!-- Saved accounts list -->
+        <div class="saved-users-wrap" id="savedUsersWrap">
+          <div class="saved-users-label">Choose an account</div>
+          <div class="saved-users-list" id="savedUsersList"></div>
+          <div class="saved-users-divider">
+            <div class="saved-users-divider-line"></div>
+            <span class="saved-users-divider-text">or enter email manually</span>
+            <div class="saved-users-divider-line"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" id="lEmail" type="email" placeholder="you@example.com" autocomplete="off"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="lPass" type="password" placeholder="••••••••"
+            autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+          <button class="toggle-pass" type="button" onclick="togglePass('lPass',this)">👁️</button>
+        </div>
+        <div class="remember-row">
+          <input type="checkbox" id="rememberMe" checked/>
+          <label for="rememberMe">Remember me</label>
+        </div>
+        <button class="forgot-btn" onclick="doForgot()">Forgot password?</button>
+        <button class="btn-submit" id="lSubmit" onclick="doLogin()">
+          <span>Sign In</span><div class="spinner" id="lSpin"></div>
+        </button>
+        <div class="switch-link">Don't have an account? <button onclick="switchTab('signup')">Create one →</button></div>
+      </div>
+
+      <!-- SIGNUP -->
+      <div id="signupPanel" style="display:none">
+        <div class="perks-row">
+          <span class="perk">40+ Cities</span>
+          <span class="perk">Area-level Data</span>
+          <span class="perk">Free Forever</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input class="form-input" id="sName" type="text" placeholder="XYZ" autocomplete="name"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" id="sEmail" type="email" placeholder="you@example.com" autocomplete="email"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="sPass" type="password" placeholder="Min. 6 characters"
+            autocomplete="new-password" oninput="checkStrength(this.value)"/>
+          <button class="toggle-pass" type="button" onclick="togglePass('sPass',this)">👁️</button>
+          <div class="strength-bar"><div class="strength-fill" id="sFill"></div></div>
+          <div class="strength-lbl" id="sLbl"></div>
+        </div>
+        <div class="terms-txt">By signing up you agree to our <a href="#">Terms</a> &amp; <a href="#">Privacy Policy</a>.</div>
+        <button class="btn-submit" id="sSubmit" onclick="doSignup()">
+          <span>Create Account</span><div class="spinner" id="sSpin"></div>
+        </button>
+        <div class="switch-link">Already have an account? <button onclick="switchTab('login')">Sign in →</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     CITY + AREA DATA
+══════════════════════════════ -->
+<script>
+// Cities that have detailed area data (from VR file)
+const areaData = {
+  'Ahmedabad': {
+    areas:[
+      {name:'Navrangpura',lat:23.0395,lng:72.5603,zoom:14},
+      {name:'Satellite',lat:23.0168,lng:72.5128,zoom:14},
+      {name:'Bopal',lat:23.0326,lng:72.4668,zoom:14},
+      {name:'Maninagar',lat:22.9937,lng:72.6043,zoom:14},
+      {name:'Naroda',lat:23.0800,lng:72.6530,zoom:14},
+      {name:'Vatva',lat:22.9500,lng:72.6400,zoom:14},
+      {name:'Chandkheda',lat:23.1054,lng:72.5852,zoom:14},
+      {name:'Gota',lat:23.1000,lng:72.5300,zoom:14},
+      {name:'Paldi',lat:23.0109,lng:72.5672,zoom:14},
+      {name:'Vejalpur',lat:22.9800,lng:72.5100,zoom:14},
+      {name:'Shahibaug',lat:23.0600,lng:72.5900,zoom:14},
+      {name:'Nikol',lat:23.0450,lng:72.6550,zoom:14},
+      {name:'Vastral',lat:23.0100,lng:72.6700,zoom:14},
+      {name:'Thaltej',lat:23.0550,lng:72.4950,zoom:14},
+      {name:'Prahlad Nagar',lat:23.0070,lng:72.5040,zoom:14},
+      {name:'Iscon',lat:23.0350,lng:72.5020,zoom:14},
+      {name:'Ghatlodia',lat:23.0780,lng:72.5430,zoom:14},
+      {name:'Motera',lat:23.1040,lng:72.6040,zoom:14},
+      {name:'Sabarmati',lat:23.0750,lng:72.5980,zoom:14},
+      {name:'Odhav',lat:22.9980,lng:72.6600,zoom:14},
+      {name:'Ranip',lat:23.0730,lng:72.5630,zoom:14},
+      {name:'Naranpura',lat:23.0340,lng:72.5580,zoom:14},
+      {name:'Ambawadi',lat:23.0230,lng:72.5380,zoom:14},
+      {name:'Ellis Bridge',lat:23.0275,lng:72.5710,zoom:14},
+    ]
+  },
+  'Gandhinagar': {
+    areas:[
+      {name:'Sector 1',lat:23.2230,lng:72.6500,zoom:14},
+      {name:'Sector 5',lat:23.2180,lng:72.6420,zoom:14},
+      {name:'Sector 7',lat:23.2150,lng:72.6350,zoom:14},
+      {name:'Sector 9',lat:23.2120,lng:72.6280,zoom:14},
+      {name:'Sector 11',lat:23.2090,lng:72.6210,zoom:14},
+      {name:'Sector 13',lat:23.2060,lng:72.6140,zoom:14},
+      {name:'Sector 15',lat:23.2030,lng:72.6070,zoom:14},
+      {name:'Sector 17',lat:23.2000,lng:72.6000,zoom:14},
+      {name:'Sector 19',lat:23.1970,lng:72.5930,zoom:14},
+      {name:'Sector 21',lat:23.1940,lng:72.5860,zoom:14},
+      {name:'Sector 23',lat:23.1910,lng:72.5790,zoom:14},
+      {name:'Sector 25',lat:23.1880,lng:72.5720,zoom:14},
+      {name:'Sector 28',lat:23.1840,lng:72.5620,zoom:14},
+      {name:'GIFT City',lat:23.1580,lng:72.6830,zoom:14},
+      {name:'Infocity',lat:23.1900,lng:72.6300,zoom:14},
+      {name:'Kudasan',lat:23.2050,lng:72.6550,zoom:14},
+      {name:'Pethapur',lat:23.2750,lng:72.6380,zoom:14},
+      {name:'Koba',lat:23.2200,lng:72.6750,zoom:14},
+      {name:'Raysan',lat:23.1650,lng:72.6200,zoom:14},
+      {name:'Vavol',lat:23.1750,lng:72.6050,zoom:14},
+    ]
+  }
+};
+
+// All 40+ cities
+const cities=[
+  {name:"Mumbai",state:"Maharashtra",lat:19.076,lng:72.877,zoom:12,temp:"34.5°C",ndvi:"0.22",aqi:"168",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Delhi",state:"Delhi",lat:28.613,lng:77.209,zoom:12,temp:"38.2°C",ndvi:"0.18",aqi:"212",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Bengaluru",state:"Karnataka",lat:12.971,lng:77.594,zoom:12,temp:"27.4°C",ndvi:"0.42",aqi:"88",risk:"LOW",riskClass:"risk-low"},
+  {name:"Chennai",state:"Tamil Nadu",lat:13.082,lng:80.270,zoom:12,temp:"33.1°C",ndvi:"0.31",aqi:"102",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Hyderabad",state:"Telangana",lat:17.385,lng:78.486,zoom:12,temp:"32.6°C",ndvi:"0.28",aqi:"128",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Kolkata",state:"West Bengal",lat:22.572,lng:88.363,zoom:12,temp:"35.3°C",ndvi:"0.24",aqi:"178",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Pune",state:"Maharashtra",lat:18.520,lng:73.856,zoom:12,temp:"30.8°C",ndvi:"0.38",aqi:"95",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Ahmedabad",state:"Gujarat",lat:23.022,lng:72.571,zoom:12,temp:"38.5°C",ndvi:"0.16",aqi:"155",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Jaipur",state:"Rajasthan",lat:26.912,lng:75.787,zoom:12,temp:"39.4°C",ndvi:"0.14",aqi:"162",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Surat",state:"Gujarat",lat:21.170,lng:72.831,zoom:12,temp:"36.2°C",ndvi:"0.20",aqi:"138",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Lucknow",state:"Uttar Pradesh",lat:26.846,lng:80.946,zoom:12,temp:"37.1°C",ndvi:"0.21",aqi:"182",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Kanpur",state:"Uttar Pradesh",lat:26.449,lng:80.331,zoom:12,temp:"37.8°C",ndvi:"0.17",aqi:"198",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Nagpur",state:"Maharashtra",lat:21.145,lng:79.082,zoom:12,temp:"36.8°C",ndvi:"0.29",aqi:"110",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Kochi",state:"Kerala",lat:9.931,lng:76.267,zoom:13,temp:"29.2°C",ndvi:"0.52",aqi:"72",risk:"LOW",riskClass:"risk-low"},
+  {name:"Chandigarh",state:"Punjab",lat:30.733,lng:76.779,zoom:13,temp:"32.6°C",ndvi:"0.44",aqi:"95",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Bhopal",state:"Madhya Pradesh",lat:23.259,lng:77.412,zoom:12,temp:"35.4°C",ndvi:"0.34",aqi:"118",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Indore",state:"Madhya Pradesh",lat:22.719,lng:75.857,zoom:12,temp:"35.2°C",ndvi:"0.26",aqi:"122",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Visakhapatnam",state:"Andhra Pradesh",lat:17.686,lng:83.218,zoom:12,temp:"31.5°C",ndvi:"0.36",aqi:"95",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Patna",state:"Bihar",lat:25.594,lng:85.137,zoom:12,temp:"36.4°C",ndvi:"0.22",aqi:"175",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Coimbatore",state:"Tamil Nadu",lat:11.016,lng:76.955,zoom:12,temp:"29.8°C",ndvi:"0.40",aqi:"82",risk:"LOW",riskClass:"risk-low"},
+  {name:"Thiruvananthapuram",state:"Kerala",lat:8.524,lng:76.936,zoom:13,temp:"28.6°C",ndvi:"0.55",aqi:"65",risk:"LOW",riskClass:"risk-low"},
+  {name:"Guwahati",state:"Assam",lat:26.144,lng:91.736,zoom:12,temp:"28.4°C",ndvi:"0.58",aqi:"78",risk:"LOW",riskClass:"risk-low"},
+  {name:"Shimla",state:"Himachal Pradesh",lat:31.104,lng:77.173,zoom:13,temp:"16.2°C",ndvi:"0.72",aqi:"42",risk:"LOW",riskClass:"risk-low"},
+  {name:"Varanasi",state:"Uttar Pradesh",lat:25.317,lng:83.006,zoom:13,temp:"36.8°C",ndvi:"0.20",aqi:"192",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Amritsar",state:"Punjab",lat:31.634,lng:74.872,zoom:13,temp:"34.5°C",ndvi:"0.32",aqi:"128",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Vijayawada",state:"Andhra Pradesh",lat:16.506,lng:80.648,zoom:12,temp:"34.2°C",ndvi:"0.30",aqi:"115",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Rajkot",state:"Gujarat",lat:22.303,lng:70.802,zoom:12,temp:"36.8°C",ndvi:"0.18",aqi:"145",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Gandhinagar",state:"Gujarat",lat:23.215,lng:72.636,zoom:12,temp:"36.2°C",ndvi:"0.35",aqi:"122",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Prayagraj",state:"Uttar Pradesh",lat:25.435,lng:81.846,zoom:12,temp:"36.2°C",ndvi:"0.19",aqi:"175",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Meerut",state:"Uttar Pradesh",lat:28.984,lng:77.706,zoom:12,temp:"36.4°C",ndvi:"0.19",aqi:"188",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Raipur",state:"Chhattisgarh",lat:21.251,lng:81.630,zoom:12,temp:"33.6°C",ndvi:"0.35",aqi:"125",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Haridwar",state:"Uttarakhand",lat:29.945,lng:78.163,zoom:13,temp:"28.8°C",ndvi:"0.42",aqi:"88",risk:"LOW",riskClass:"risk-low"},
+  {name:"Hubli",state:"Karnataka",lat:15.364,lng:75.124,zoom:12,temp:"30.2°C",ndvi:"0.33",aqi:"98",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Kota",state:"Rajasthan",lat:25.182,lng:75.839,zoom:12,temp:"37.5°C",ndvi:"0.18",aqi:"155",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Salem",state:"Tamil Nadu",lat:11.664,lng:78.146,zoom:12,temp:"31.5°C",ndvi:"0.32",aqi:"88",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Warangal",state:"Telangana",lat:17.977,lng:79.598,zoom:12,temp:"33.5°C",ndvi:"0.31",aqi:"108",risk:"MEDIUM",riskClass:"risk-mid"},
+  {name:"Dhanbad",state:"Jharkhand",lat:23.795,lng:86.430,zoom:12,temp:"32.5°C",ndvi:"0.30",aqi:"145",risk:"HIGH",riskClass:"risk-high"},
+  {name:"Imphal",state:"Manipur",lat:24.817,lng:93.938,zoom:13,temp:"22.4°C",ndvi:"0.58",aqi:"62",risk:"LOW",riskClass:"risk-low"},
+  {name:"Jamshedpur",state:"Jharkhand",lat:22.805,lng:86.203,zoom:12,temp:"31.8°C",ndvi:"0.38",aqi:"118",risk:"MEDIUM",riskClass:"risk-mid"},
+];
+
+let selectedCity=null, selectedArea=null;
+
+const map=L.map('map',{zoomControl:false,zoomSnap:0.5,zoomDelta:0.5,inertia:true,inertiaDeceleration:2000,inertiaMaxSpeed:1500,easeLinearity:0.2,markerZoomAnimation:true,transform3DLimit:8388608}).setView([22.3,72.6],8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+
+// ── TOAST ──
+function showLoginToast(){document.getElementById('loginToast').classList.add('show');document.getElementById('toastBackdrop').classList.add('show');}
+function dismissToast(){document.getElementById('loginToast').classList.remove('show');document.getElementById('toastBackdrop').classList.remove('show');}
+
+let currentMarker = null;
+
+// ── CITY DROPDOWN (exact vr.html) ──
+function onCityChange(val){
+  if(!getSession()){showLoginToast();document.getElementById('citySelect').value='';return;}
+  const areaSelect=document.getElementById('areaSelect');
+  areaSelect.innerHTML='<option value="">— Select an area —</option>';
+  document.getElementById('cityCard').classList.remove('visible');
+  if(!val){areaSelect.disabled=true;selectedCity=null;map.flyTo([22.3,72.6],8,{duration:1.8,easeLinearity:0.25});return;}
+
+  const c=cities.find(x=>x.name===val);
+  if(!c)return;
+  selectedCity=c; selectedArea=null;
+
+  if(areaData[val]){
+    areaData[val].areas.forEach(a=>{
+      const opt=document.createElement('option');
+      opt.value=a.name; opt.textContent=a.name;
+      areaSelect.appendChild(opt);
+    });
+    areaSelect.disabled=false;
+  } else {
+    // City exists but no ML area data — show message
+    const opt=document.createElement('option');
+    opt.value=''; opt.textContent='ML analysis: Ahmedabad & Gandhinagar only';
+    areaSelect.appendChild(opt);
+    areaSelect.disabled=true;
+  }
+
+  const currentZoom=map.getZoom();
+  if(currentZoom>9){
+    map.flyTo([22.3,72.6],8,{duration:0.8,easeLinearity:0.4});
+    setTimeout(()=>map.flyTo([c.lat,c.lng],c.zoom,{duration:2.0,easeLinearity:0.25}),900);
+  } else {
+    map.flyTo([c.lat,c.lng],c.zoom,{duration:2.5,easeLinearity:0.2});
+  }
+  document.getElementById('map').classList.add('focused');
+}
+
+// ── AREA DROPDOWN (exact vr.html) ──
+function onAreaChange(val){
+  if(!getSession()){showLoginToast();return;}
+  if(!val||!selectedCity)return;
+  const areas=areaData[selectedCity.name]?.areas;
+  if(!areas)return;
+  const area=areas.find(a=>a.name===val);
+  if(!area)return;
+  selectedArea=area;
+
+  // Hide hero + dropdowns (exact vr.html)
+  document.getElementById('heroTop').classList.add('hidden');
+  document.getElementById('dropdownsWrap').classList.add('hidden');
+
+  const currentZoom=map.getZoom();
+  if(currentZoom>13){
+    map.flyTo([selectedCity.lat,selectedCity.lng],selectedCity.zoom,{duration:0.8,easeLinearity:0.4});
+    setTimeout(()=>map.flyTo([area.lat,area.lng],area.zoom,{duration:2.0,easeLinearity:0.25}),900);
+  } else {
+    map.flyTo([area.lat,area.lng],area.zoom,{duration:2.5,easeLinearity:0.2});
+  }
+
+  const cityKey=document.getElementById('citySelect').value;
+  document.getElementById('cardName').textContent=area.name;
+  document.getElementById('cardState').textContent=area.name+' · '+cityKey;
+  document.getElementById('cardTemp').textContent=selectedCity.temp;
+  document.getElementById('cardNDVI').textContent=selectedCity.ndvi;
+  document.getElementById('cardAQI').textContent=selectedCity.aqi;
+  const r=document.getElementById('cardRisk');
+  r.textContent=selectedCity.risk+' RISK'; r.className='overall-risk '+selectedCity.riskClass;
+  document.getElementById('cityCard').classList.add('visible');
+
+  // ── Google Maps style red pin marker ──
+  if(currentMarker) map.removeLayer(currentMarker);
+  const pinIcon = L.divIcon({
+    className:'',
+    html:`<div style="position:relative;width:30px;height:42px;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35));">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 42" width="30" height="42">
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 13.5 26.1 14.1 26.8.5.6 1.3.6 1.8 0C16.5 41.1 30 25.5 30 15 30 6.7 23.3 0 15 0z" fill="#EA4335"/>
+        <circle cx="15" cy="15" r="7" fill="white"/>
+        <circle cx="15" cy="15" r="4.5" fill="#EA4335"/>
+      </svg>
+    </div>`,
+    iconSize:[30,42],
+    iconAnchor:[15,42],
+    popupAnchor:[0,-44]
+  });
+  currentMarker = L.marker([area.lat, area.lng], {icon: pinIcon}).addTo(map);
+  currentMarker.bindTooltip(`<b>${area.name}</b><br><span style="font-size:11px;color:#666;">${cityKey}</span>`,{
+    direction:'top', offset:[0,-44], className:'gmaps-tooltip'
+  }).openTooltip();
+}
+
+// ── RESET (card close button — exact vr.html) ──
+function resetSearch(){
+  document.getElementById('cityCard').classList.remove('visible');
+  document.getElementById('heroTop').classList.remove('hidden');
+  document.getElementById('dropdownsWrap').classList.remove('hidden');
+  document.getElementById('citySelect').value='';
+  document.getElementById('areaSelect').innerHTML='<option value="">— Select city first —</option>';
+  document.getElementById('areaSelect').disabled=true;
+  selectedCity=null; selectedArea=null;
+  document.getElementById('map').classList.remove('focused');
+  if(currentMarker){map.removeLayer(currentMarker);currentMarker=null;}
+  map.flyTo([22.3,72.6],8,{duration:1.8,easeLinearity:0.25});
+}
+
+function goToDetails(){
+  if(!selectedArea||!selectedCity)return;
+  window.location.href='/dashboard?city='+encodeURIComponent(selectedCity.name)+'&area='+encodeURIComponent(selectedArea.name);
+}
+</script>
+
+<!-- ══════════════════════════════
+     AUTH SYSTEM (localStorage)
+══════════════════════════════ -->
+<script>
+const USERS_KEY='ew_users', SESSION_KEY='ew_session';
+
+function getUsers(){try{return JSON.parse(localStorage.getItem(USERS_KEY)||'[]');}catch(e){return[];}}
+function saveUsers(u){localStorage.setItem(USERS_KEY,JSON.stringify(u));}
+function getSession(){try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(e){return null;}}
+function saveSession(u){localStorage.setItem(SESSION_KEY,JSON.stringify(u));}
+function clearSession(){localStorage.removeItem(SESSION_KEY);}
+function hashPass(p){let h=0;for(let i=0;i<p.length;i++){h=(Math.imul(31,h)+p.charCodeAt(i))|0;}return h.toString(36);}
+
+function applyAuthState(){
+  const u=getSession();
+  document.getElementById('btnLogin').style.display=u?'none':'';
+  document.getElementById('btnSignup').style.display=u?'none':'';
+  document.getElementById('userPill').classList.toggle('show',!!u);
+  document.getElementById('btnSignout').classList.toggle('show',!!u);
+  if(u){
+    document.getElementById('userName').textContent=u.name;
+    document.getElementById('userAvatar').textContent=u.name.charAt(0).toUpperCase();
+  }
+}
+
+function openModal(tab){
+  document.getElementById('authModal').classList.add('open');
+  switchTab(tab);clearMsgs();
+  // Always clear fields — no auto-fill
+  document.getElementById('lEmail').value='';
+  document.getElementById('lPass').value='';
+  // Show saved accounts list on login tab
+  if(tab==='login') renderSavedUsers();
+}
+function closeModal(){document.getElementById('authModal').classList.remove('open');}
+function handleBackdropClick(e){if(e.target===document.getElementById('authModal'))closeModal();}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();dismissToast();}});
+
+function switchTab(tab){
+  const L=tab==='login';
+  document.getElementById('tabLogin').classList.toggle('active',L);
+  document.getElementById('tabSignup').classList.toggle('active',!L);
+  document.getElementById('loginPanel').style.display=L?'':'none';
+  document.getElementById('signupPanel').style.display=L?'none':'';
+  document.getElementById('modalTitle').textContent=L?'Welcome Back':'Join GREENGRID';
+  document.getElementById('modalSub').textContent=L?'Sign in to your account':'Monitor India\'s environment for free';
+  clearMsgs();
+  if(L) renderSavedUsers();
+}
+
+function clearMsgs(){
+  document.getElementById('authError').classList.remove('show');
+  document.getElementById('authOk').classList.remove('show');
+  ['lEmail','lPass','sName','sEmail','sPass'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('inp-err');});
+}
+function setErr(msg){document.getElementById('authErrTxt').textContent=msg;document.getElementById('authError').classList.add('show');}
+function setOk(msg){document.getElementById('authOkTxt').textContent=msg;document.getElementById('authOk').classList.add('show');}
+function markInp(id,msg){const el=document.getElementById(id);if(el)el.classList.add('inp-err');setErr(msg);}
+function setLoad(b,s,on){document.getElementById(b).disabled=on;document.getElementById(s).style.display=on?'block':'none';}
+function togglePass(id,btn){const el=document.getElementById(id);const show=el.type==='password';el.type=show?'text':'password';btn.textContent=show?'🙈':'👁️';}
+
+function doLogin(){
+  clearMsgs();
+  const email=document.getElementById('lEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('lPass').value;
+  const remember=document.getElementById('rememberMe').checked;
+  if(!email){markInp('lEmail','Please enter your email');return;}
+  if(!pass){markInp('lPass','Please enter your password');return;}
+  if(!/\S+@\S+\.\S+/.test(email)){markInp('lEmail','Enter a valid email address');return;}
+  setLoad('lSubmit','lSpin',true);
+  setTimeout(()=>{
+    const users=getUsers();
+    const user=users.find(u=>u.email===email);
+    if(!user){setLoad('lSubmit','lSpin',false);markInp('lEmail','No account found. Sign up first!');return;}
+    if(user.password!==hashPass(pass)){setLoad('lSubmit','lSpin',false);markInp('lPass','Incorrect password. Try again.');return;}
+    if(remember)localStorage.setItem('ew_remember',email);
+    else localStorage.removeItem('ew_remember');
+    saveSession({name:user.name,email:user.email});
+    setOk('Welcome back, '+user.name+'! 🌍');
+    setLoad('lSubmit','lSpin',false);
+    setTimeout(()=>{closeModal();applyAuthState();},1200);
+  },600);
+}
+
+function doSignup(){
+  clearMsgs();
+  const name=document.getElementById('sName').value.trim();
+  const email=document.getElementById('sEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('sPass').value;
+  if(!name){markInp('sName','Please enter your full name');return;}
+  if(!email){markInp('sEmail','Please enter your email');return;}
+  if(!/\S+@\S+\.\S+/.test(email)){markInp('sEmail','Enter a valid email address');return;}
+  if(pass.length<6){markInp('sPass','Password must be at least 6 characters');return;}
+  setLoad('sSubmit','sSpin',true);
+  setTimeout(()=>{
+    const users=getUsers();
+    if(users.find(u=>u.email===email)){setLoad('sSubmit','sSpin',false);markInp('sEmail','Email already registered. Try logging in!');return;}
+    users.push({name,email,password:hashPass(pass),joined:new Date().toISOString()});
+    saveUsers(users);
+    saveSession({name,email});
+    setOk('Welcome to GREENGRID, '+name+'! 🛰️');
+    setLoad('sSubmit','sSpin',false);
+    setTimeout(()=>{closeModal();applyAuthState();},1300);
+  },700);
+}
+
+function doForgot(){
+  clearMsgs();
+  const email=document.getElementById('lEmail').value.trim().toLowerCase();
+  if(!email){markInp('lEmail','Enter your email address first');return;}
+  const user=getUsers().find(u=>u.email===email);
+  if(!user){markInp('lEmail','No account found with this email.');return;}
+  setOk('Account found ✅ — Since this is a local app, sign in with your original password or create a new account.');
+}
+
+function doSignOut(){clearSession();applyAuthState();}
+
+function checkStrength(val){
+  const f=document.getElementById('sFill'),l=document.getElementById('sLbl');
+  if(!val){f.style.width='0%';l.textContent='';return;}
+  let s=0;
+  if(val.length>=6)s++;if(val.length>=10)s++;
+  if(/[A-Z]/.test(val))s++;if(/[0-9]/.test(val))s++;if(/[^A-Za-z0-9]/.test(val))s++;
+  const lvl=[{w:'20%',c:'#EF4444',t:'Very Weak'},{w:'40%',c:'#F97316',t:'Weak'},{w:'60%',c:'#EAB308',t:'Fair'},{w:'80%',c:'#84CC16',t:'Strong'},{w:'100%',c:'#22C55E',t:'Very Strong'}][Math.min(s-1,4)];
+  f.style.width=lvl.w;f.style.background=lvl.c;l.textContent=lvl.t;l.style.color=lvl.c;
+}
+
+// Init
+applyAuthState();
+
+function renderSavedUsers(){
+  const users = getUsers();
+  const wrap = document.getElementById('savedUsersWrap');
+  const list = document.getElementById('savedUsersList');
+  if(users.length === 0){ wrap.classList.remove('show'); return; }
+  wrap.classList.add('show');
+  list.innerHTML = users.map(u => `
+    <div class="saved-user-item" onclick="selectSavedUser('${u.email}')">
+      <div class="saved-user-avatar">${u.name.charAt(0).toUpperCase()}</div>
+      <div class="saved-user-info">
+        <div class="saved-user-name">${u.name}</div>
+        <div class="saved-user-email">${u.email}</div>
+      </div>
+      <span class="saved-user-arrow">→</span>
+    </div>
+  `).join('');
+}
+
+function selectSavedUser(email){
+  const users = getUsers();
+  const user = users.find(u => u.email === email);
+  if(!user) return;
+  clearMsgs();
+  // Auto-fill both fields
+  document.getElementById('lEmail').value = email;
+  document.getElementById('lPass').value = '••••••••'; // show dots visually
+  // Store the hashed password for direct login
+  _pendingHash = user.password;
+  // Show loading and log in directly
+  setLoad('lSubmit','lSpin',true);
+  setTimeout(()=>{
+    saveSession({name:user.name, email:user.email});
+    setOk('Welcome back, '+user.name+'! 🌍');
+    setLoad('lSubmit','lSpin',false);
+    setTimeout(()=>{closeModal();applyAuthState();}, 1000);
+  }, 600);
+}
+
+let _pendingHash = null;
+</script>
+</body>
+</html>
